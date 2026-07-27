@@ -5,6 +5,9 @@ Starting with `1.1.0 (versionCode 2)`, Android and web intentionally render the
 same pages, forms, validation and role-specific capabilities from one source of
 truth. This removes the UI drift that existed in the first native MVP.
 
+Release `1.1.1 (versionCode 3)` replaces all Expo template artwork with the
+DocJob launcher, adaptive, monochrome and splash assets.
+
 The app:
 
 - opens the configured DocJob HTTPS origin in `react-native-webview`;
@@ -50,7 +53,7 @@ profile and localization test coverage.
 An APK build must also be checked with Android build tools:
 
 - package: `com.docjob.app`;
-- version: `1.1.0 (2)`;
+- version: `1.1.1 (3)`;
 - minimum and target SDK;
 - zip alignment;
 - APK signature;

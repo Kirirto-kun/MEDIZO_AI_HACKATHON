@@ -4,15 +4,15 @@ The Android button on `/download` is fail-closed. It is enabled only when the
 versioned APK exists and all five release variables are valid:
 
 ```dotenv
-NEXT_PUBLIC_ANDROID_APP_URL="https://docjob.kz/downloads/android/docjob-android-1.1.0-2.apk"
-ANDROID_APP_VERSION="1.1.0"
-ANDROID_APP_VERSION_CODE="2"
+NEXT_PUBLIC_ANDROID_APP_URL="https://docjob.kz/downloads/android/docjob-android-1.1.1-3.apk"
+ANDROID_APP_VERSION="1.1.1"
+ANDROID_APP_VERSION_CODE="3"
 ANDROID_APP_SHA256="<64 lowercase hex characters>"
 ANDROID_APP_SIZE_BYTES="<exact byte count>"
 ```
 
-For release `1.1.0 (2)`, upload the signed APK atomically to
-`/srv/docjob/releases/android/docjob-android-1.1.0-2.apk`, owned by root and
+For release `1.1.1 (3)`, upload the signed APK atomically to
+`/srv/docjob/releases/android/docjob-android-1.1.1-3.apk`, owned by root and
 mode `0644`. Keep the signing keystore off the server and never overwrite a
 published versioned file. Calculate the byte count and SHA-256 from the exact
 artifact before setting the environment values, then verify the remote file
@@ -26,12 +26,12 @@ server-rendered page at runtime.
 After deployment, verify:
 
 ```bash
-curl -fsSI https://docjob.kz/downloads/android/docjob-android-1.1.0-2.apk
+curl -fsSI https://docjob.kz/downloads/android/docjob-android-1.1.1-3.apk
 curl -fsS -H 'Range: bytes=0-1023' \
-  https://docjob.kz/downloads/android/docjob-android-1.1.0-2.apk -o /tmp/docjob-range.bin
-curl -fsS https://docjob.kz/downloads/android/docjob-android-1.1.0-2.apk \
-  -o /tmp/docjob-android-1.1.0-2.apk
-sha256sum /tmp/docjob-android-1.1.0-2.apk
+  https://docjob.kz/downloads/android/docjob-android-1.1.1-3.apk -o /tmp/docjob-range.bin
+curl -fsS https://docjob.kz/downloads/android/docjob-android-1.1.1-3.apk \
+  -o /tmp/docjob-android-1.1.1-3.apk
+sha256sum /tmp/docjob-android-1.1.1-3.apk
 curl -o /dev/null -sS -w '%{http_code}\n' \
   https://docjob.kz/downloads/android/unknown.apk
 ```

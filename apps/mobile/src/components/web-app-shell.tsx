@@ -21,8 +21,8 @@ import { colors } from '../theme/colors';
 export type NavigationDisposition = 'internal' | 'external' | 'blocked';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
-const APP_VERSION = Constants.expoConfig?.version ?? '1.1.0';
-const ANDROID_VERSION_CODE = Constants.expoConfig?.android?.versionCode ?? 2;
+const APP_VERSION = Constants.expoConfig?.version ?? '1.1.1';
+const ANDROID_VERSION_CODE = Constants.expoConfig?.android?.versionCode ?? 3;
 
 export const DOCJOB_WEB_APP_URL = `${API_BASE_URL.replace(/\/+$/, '')}/`;
 export const DOCJOB_MOBILE_USER_AGENT =
