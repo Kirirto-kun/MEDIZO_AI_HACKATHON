@@ -30,6 +30,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { prisma } from '@docjob/db';
 import { hashPassword, hashRefreshToken } from '@docjob/auth';
+import { DOCJOB_MOBILE_USER_AGENT_TOKEN } from '@docjob/types';
 import { POST as loginPOST } from './login/route';
 import { POST as refreshPOST } from './refresh/route';
 import { POST as logoutPOST } from './logout/route';
@@ -72,13 +73,13 @@ describe('mobile-transport auth endpoints (integration, real Postgres)', () => {
     }
   });
 
-  async function makeApprovedUser() {
+  async function makeApprovedUser(role: 'ADMIN' | 'DOCTOR' | 'REVIEWER' = 'DOCTOR') {
     const user = await prisma.user.create({
       data: {
         email: uniqueEmail('login'),
         passwordHash: await hashPassword(PASSWORD),
         name: 'Auth Mobile Test User',
-        role: 'DOCTOR',
+        role,
         approvedAt: new Date(),
       },
     });
@@ -112,6 +113,40 @@ describe('mobile-transport auth endpoints (integration, real Postgres)', () => {
     const setCookie = res.headers.get('set-cookie') ?? '';
     expect(setCookie).toMatch(/docjob-access=/);
     expect(setCookie).toMatch(/docjob-refresh=/);
+  });
+
+  it('rejects ADMIN from the embedded mobile surface without issuing tokens or cookies', async () => {
+    const user = await makeApprovedUser('ADMIN');
+    const req = jsonRequest(
+      'https://example.test/api/auth/login',
+      { email: user.email, password: PASSWORD },
+      {
+        origin: WEB_ORIGIN,
+        'user-agent': `Mozilla/5.0 ${DOCJOB_MOBILE_USER_AGENT_TOKEN}/1.1.0`,
+      },
+    );
+    const res = await loginPOST(req);
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ status: 'unsupported_role' });
+    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it('keeps desktop web ADMIN login unchanged', async () => {
+    const user = await makeApprovedUser('ADMIN');
+    const req = jsonRequest(
+      'https://example.test/api/auth/login',
+      { email: user.email, password: PASSWORD },
+      { origin: WEB_ORIGIN, 'user-agent': 'Mozilla/5.0 desktop-browser' },
+    );
+    const res = await loginPOST(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { user: { id: string; role: string } };
+    expect(body.user).toMatchObject({ id: user.id, role: 'ADMIN' });
+    expect(res.headers.get('set-cookie')).toMatch(/docjob-access=/);
+    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(1);
   });
 
   it('login forwards an optional deviceLabel through to the issued refresh-token family', async () => {
@@ -206,6 +241,30 @@ describe('mobile-transport auth endpoints (integration, real Postgres)', () => {
     expect(data.user?.id).toBe(user.id);
   });
 
+  it('GET /api/auth/me blocks mobile access after the database role changes to ADMIN', async () => {
+    const user = await makeApprovedUser('DOCTOR');
+    const { access } = await loginAs(user.email);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { role: 'ADMIN' },
+    });
+
+    const req = new NextRequest('https://example.test/api/auth/me', {
+      headers: {
+        authorization: `Bearer ${access}`,
+        'user-agent': `Mozilla/5.0 ${DOCJOB_MOBILE_USER_AGENT_TOKEN}/1.1.0`,
+      },
+    });
+    const res = await mePOST(req);
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      user: null,
+      status: 'unsupported_role',
+    });
+    expect(res.headers.get('set-cookie')).toMatch(/docjob-access=;/);
+  });
+
   it('GET /api/auth/me returns { user: null } with neither a Bearer header nor a cookie', async () => {
     const req = new NextRequest('https://example.test/api/auth/me');
     const res = await mePOST(req);
@@ -248,6 +307,32 @@ describe('mobile-transport auth endpoints (integration, real Postgres)', () => {
     expect(res.status).toBe(200);
     const data = (await res.json()) as LoginBody;
     expect(data.refresh).not.toBe(refresh);
+  });
+
+  it('refresh revokes an ADMIN family instead of restoring it in the mobile surface', async () => {
+    const user = await makeApprovedUser('ADMIN');
+    const { refresh } = await loginAs(user.email);
+
+    const req = jsonRequest(
+      'https://example.test/api/auth/refresh',
+      { refresh },
+      {
+        'user-agent': `Mozilla/5.0 ${DOCJOB_MOBILE_USER_AGENT_TOKEN}/1.1.0`,
+      },
+    );
+    const res = await refreshPOST(req);
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ status: 'unsupported_role' });
+    expect(res.headers.get('set-cookie')).toMatch(/docjob-access=;/);
+
+    const family = await prisma.refreshToken.findMany({
+      where: { userId: user.id },
+      select: { revokedAt: true, revokeReason: true },
+    });
+    expect(family.length).toBeGreaterThan(0);
+    expect(family.every((token) => token.revokedAt !== null)).toBe(true);
+    expect(family.every((token) => token.revokeReason === 'unsupported-mobile-role')).toBe(true);
   });
 
   it('refresh with neither cookie, body, nor header returns 401', async () => {

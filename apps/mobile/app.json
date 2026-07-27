@@ -3,17 +3,18 @@
     "name": "DocJob",
     "slug": "docjob",
     "scheme": "docjob",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.docjob.app"
+      "bundleIdentifier": "com.docjob.app",
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.docjob.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#050a18",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -28,7 +29,9 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-localization"
+      "expo-localization",
+      "./plugins/with-legacy-download-permission",
+      "./plugins/with-secure-release-signing"
     ]
   }
 }

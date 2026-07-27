@@ -186,43 +186,53 @@ export async function createCase(actor: Actor | null, input: CreateCaseInput): P
   if (!parsed.success) throw new ValidationError('Проверьте правильность заполнения формы кейса.');
   const data = parsed.data;
   const mode = (data.mode ?? 'CLINICAL_QUEST') as CaseMode;
+  const attachmentIds = [...new Set(data.attachmentIds ?? [])];
 
-  const created = await prisma.case.create({
-    data: {
-      authorId: author.id,
-      name: data.name,
-      age: data.age ?? null,
-      gender: data.gender ?? null,
-      primaryCondition: data.primaryCondition ?? null,
-      history: data.history ?? null,
-      scenarioDescription: data.scenarioDescription ?? null,
-      learningObjectives: data.learningObjectives ?? [],
-      comorbidities: data.comorbidities ?? null,
-      subgroup: data.subgroup ?? null,
-      specialty: data.specialty ?? null,
-      tags: data.tags ?? [],
-      teaser: data.teaser ?? null,
-      mode: mode as PrismaCaseMode,
-      body: (data.body ?? EMPTY_BODY) as Prisma.InputJsonValue,
-      images: data.imageFilenames && data.imageFilenames.length
-        ? {
-            create: data.imageFilenames.map((img, order) => ({
-              filename: img.filename,
-              mimeType: img.mimeType,
-              order,
-            })),
-          }
-        : undefined,
-    },
-    include: { images: true, attachments: true },
-  });
-
-  if (data.attachmentIds && data.attachmentIds.length) {
-    await prisma.caseAttachment.updateMany({
-      where: { id: { in: data.attachmentIds }, caseId: null },
-      data: { caseId: created.id },
+  const created = await prisma.$transaction(async (tx) => {
+    const row = await tx.case.create({
+      data: {
+        authorId: author.id,
+        name: data.name,
+        age: data.age ?? null,
+        gender: data.gender ?? null,
+        primaryCondition: data.primaryCondition ?? null,
+        history: data.history ?? null,
+        scenarioDescription: data.scenarioDescription ?? null,
+        learningObjectives: data.learningObjectives ?? [],
+        comorbidities: data.comorbidities ?? null,
+        subgroup: data.subgroup ?? null,
+        specialty: data.specialty ?? null,
+        tags: data.tags ?? [],
+        teaser: data.teaser ?? null,
+        mode: mode as PrismaCaseMode,
+        body: (data.body ?? EMPTY_BODY) as Prisma.InputJsonValue,
+        images: data.imageFilenames && data.imageFilenames.length
+          ? {
+              create: data.imageFilenames.map((img, order) => ({
+                filename: img.filename,
+                mimeType: img.mimeType,
+                order,
+              })),
+            }
+          : undefined,
+      },
+      select: { id: true },
     });
-  }
+    if (attachmentIds.length) {
+      const claimed = await tx.caseAttachment.updateMany({
+        where: {
+          id: { in: attachmentIds },
+          caseId: null,
+          submissionMessageId: null,
+        },
+        data: { caseId: row.id },
+      });
+      if (claimed.count !== attachmentIds.length) {
+        throw new ValidationError('Один или несколько файлов уже используются.');
+      }
+    }
+    return row;
+  });
 
   const refreshed = await prisma.case.findUnique({
     where: { id: created.id },
@@ -258,36 +268,48 @@ export async function updateCase(actor: Actor | null, input: UpdateCaseInput): P
   const updateData: Prisma.CaseUpdateInput = { ...(rest as Prisma.CaseUpdateInput) };
   if (mode) updateData.mode = mode as PrismaCaseMode;
   if (body) updateData.body = body as Prisma.InputJsonValue;
+  const uniqueAttachmentIds = [...new Set(attachmentIds ?? [])];
 
-  const updated = await prisma.case.update({
-    where: { id },
-    data: {
-      ...updateData,
-      ...(imageFilenames
-        ? {
-            images: {
-              deleteMany: {},
-              create: imageFilenames.map((img, order) => ({
-                filename: img.filename,
-                mimeType: img.mimeType,
-                order,
-              })),
-            },
-          }
-        : {}),
-      embeddingDirty: true,
-    },
-    include: { images: true, attachments: { orderBy: { createdAt: 'asc' } } },
+  await prisma.$transaction(async (tx) => {
+    await tx.case.update({
+      where: { id },
+      data: {
+        ...updateData,
+        ...(imageFilenames
+          ? {
+              images: {
+                deleteMany: {},
+                create: imageFilenames.map((img, order) => ({
+                  filename: img.filename,
+                  mimeType: img.mimeType,
+                  order,
+                })),
+              },
+            }
+          : {}),
+        embeddingDirty: true,
+      },
+    });
+    if (uniqueAttachmentIds.length) {
+      const claimed = await tx.caseAttachment.updateMany({
+        where: {
+          id: { in: uniqueAttachmentIds },
+          caseId: null,
+          submissionMessageId: null,
+        },
+        data: { caseId: id },
+      });
+      if (claimed.count !== uniqueAttachmentIds.length) {
+        throw new ValidationError('Один или несколько файлов уже используются.');
+      }
+    }
   });
 
-  if (attachmentIds && attachmentIds.length) {
-    await prisma.caseAttachment.updateMany({
-      where: { id: { in: attachmentIds }, caseId: null },
-      data: { caseId: id },
-    });
-  }
-
-  return serializeCase(updated);
+  const refreshed = await prisma.case.findUnique({
+    where: { id },
+    include: { images: true, attachments: { orderBy: { createdAt: 'asc' } } },
+  });
+  return serializeCase(refreshed!);
 }
 
 /** Delete a case. Admin only. */
@@ -312,6 +334,14 @@ export async function updateCaseAttachment(
   if (parsed.data.title !== undefined) data.title = parsed.data.title?.trim() || null;
   if (parsed.data.description !== undefined) data.description = parsed.data.description?.trim() || null;
   if (parsed.data.order !== undefined) data.order = parsed.data.order;
+
+  const existing = await prisma.caseAttachment.findFirst({
+    // Admins edit both freshly uploaded (not yet attached to a case) files
+    // and existing case files through the same authoring component. The
+    // only forbidden records here are files claimed by a submission thread.
+    where: { id: parsed.data.id, submissionMessageId: null },
+  });
+  if (!existing) throw new NotFoundError('Вложение кейса не найдено.');
 
   const updated = await prisma.caseAttachment.update({
     where: { id: parsed.data.id },
@@ -345,7 +375,9 @@ export async function deleteCaseAttachment(
   id: string,
 ): Promise<{ id: string; filename: string }> {
   assertAdmin(actor, 'Удалять вложения может только администратор.');
-  const existing = await prisma.caseAttachment.findUnique({ where: { id } });
+  const existing = await prisma.caseAttachment.findFirst({
+    where: { id, submissionMessageId: null },
+  });
   if (!existing) throw new NotFoundError('Вложение не найдено.');
 
   await prisma.caseAttachment.delete({ where: { id } });

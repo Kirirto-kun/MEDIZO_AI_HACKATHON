@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rotateRefresh, revokeFamily, signAccessToken } from '@docjob/auth';
 import * as core from '@docjob/core';
+import { isDocJobMobileUserAgent } from '@docjob/types';
 import { assertSameOrigin } from '@/lib/csrf';
 import {
   getRefreshToken,
@@ -49,6 +50,18 @@ export async function POST(req: NextRequest) {
   if (!user || !user.approvedAt) {
     await revokeFamily(rotated.familyId, 'user-not-approved');
     const res = NextResponse.json({ error: 'Account not approved' }, { status: 401 });
+    clearAuthCookies(res);
+    return res;
+  }
+  if (
+    user.role === 'ADMIN' &&
+    isDocJobMobileUserAgent(req.headers.get('user-agent'))
+  ) {
+    await revokeFamily(rotated.familyId, 'unsupported-mobile-role');
+    const res = NextResponse.json(
+      { status: 'unsupported_role' },
+      { status: 403 },
+    );
     clearAuthCookies(res);
     return res;
   }

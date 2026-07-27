@@ -18,7 +18,7 @@ import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const doctorSchema = z.object({
-  name: z.string().min(1, 'Укажите имя врача'),
+  name: z.string().min(2, 'Укажите имя врача'),
   email: z.string().email('Введите корректный email'),
   specialty: z.string().min(1, 'Выберите специальность'),
   password: z.string().min(6, 'Минимум 6 символов'),

@@ -195,8 +195,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="relative flex items-center justify-center min-h-screen bg-background p-4">
-      <div className="absolute right-4 top-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4 pt-16 sm:pt-4">
+      <div className="absolute right-4 top-4 z-10">
         <LanguageSwitcher variant="outline" />
       </div>
       <Card className="w-full max-w-lg">

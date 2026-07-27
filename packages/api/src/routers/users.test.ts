@@ -24,6 +24,28 @@ function uniqueEmail(tag: string): string {
   return `api-users-${tag}-${Date.now()}-${Math.random().toString(36).slice(2)}@test.local`;
 }
 
+function completeRegistration(
+  email: string,
+  name: string,
+  role: 'DOCTOR' | 'REVIEWER' = 'DOCTOR',
+) {
+  return {
+    email,
+    password: 'password123',
+    name,
+    fullName: name,
+    region: 'astana',
+    age: 30,
+    specialty: 'Кардиология',
+    phoneNumber: '+7 700 000 00 00',
+    consentAccepted: true,
+    role,
+    ...(role === 'REVIEWER'
+      ? { workplace: 'API Test Clinic', academicDegree: 'к.м.н.' }
+      : {}),
+  };
+}
+
 async function captureTRPCError(fn: () => Promise<unknown>): Promise<TRPCError> {
   try {
     await fn();
@@ -82,11 +104,9 @@ describe('users router (integration, real Postgres)', () => {
   it('register (public caller, no actor) creates an unapproved user', async () => {
     const caller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
     const email = uniqueEmail('register');
-    const result = await caller.users.register({
-      email,
-      password: 'password123',
-      name: 'Newly Registered Doctor',
-    });
+    const result = await caller.users.register(
+      completeRegistration(email, 'Newly Registered Doctor'),
+    );
     createdUserIds.push(result.id);
 
     const row = await prisma.user.findUnique({ where: { id: result.id } });
@@ -99,12 +119,13 @@ describe('users router (integration, real Postgres)', () => {
     'register (public caller) permits role=%s and keeps the account unapproved',
     async (role) => {
       const caller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
-      const result = await caller.users.register({
-        email: uniqueEmail(`register-${role.toLowerCase()}`),
-        password: 'password123',
-        name: `New ${role}`,
-        role,
-      });
+      const result = await caller.users.register(
+        completeRegistration(
+          uniqueEmail(`register-${role.toLowerCase()}`),
+          `New ${role}`,
+          role,
+        ),
+      );
       createdUserIds.push(result.id);
 
       const row = await prisma.user.findUnique({ where: { id: result.id } });
@@ -117,9 +138,7 @@ describe('users router (integration, real Postgres)', () => {
     const caller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
     const email = uniqueEmail('register-admin');
     const maliciousInput = {
-      email,
-      password: 'password123',
-      name: 'Self-proclaimed Admin',
+      ...completeRegistration(email, 'Self-proclaimed Admin'),
       role: 'ADMIN',
     } as unknown as Parameters<typeof caller.users.register>[0];
 
@@ -134,6 +153,49 @@ describe('users router (integration, real Postgres)', () => {
       caller.users.register({ email: 'not-an-email', password: 'x', name: '' }),
     );
     expect(err.code).toBe('BAD_REQUEST');
+  });
+
+  // ───────────────────────── create (admin only)
+
+  it('create lets an admin provision an already-approved doctor', async () => {
+    const caller = createCaller({
+      email: noopEmailSender,
+      passwordResetBase: testPasswordResetBase,
+      contactInboxEmail: testContactInboxEmail,
+      actor: adminActor,
+    });
+    const email = uniqueEmail('admin-create');
+    const result = await caller.users.create({
+      email,
+      password: 'password123',
+      name: 'Admin Created Doctor',
+      specialty: 'Кардиология',
+      role: 'DOCTOR',
+    });
+    createdUserIds.push(result.id);
+
+    const row = await prisma.user.findUnique({ where: { id: result.id } });
+    expect(row?.approvedAt).not.toBeNull();
+    expect(row?.consentAcceptedAt).toBeNull();
+  });
+
+  it('create rejects an approved non-admin actor', async () => {
+    const caller = createCaller({
+      email: noopEmailSender,
+      passwordResetBase: testPasswordResetBase,
+      contactInboxEmail: testContactInboxEmail,
+      actor: doctorActor,
+    });
+    const err = await captureTRPCError(() =>
+      caller.users.create({
+        email: uniqueEmail('doctor-create'),
+        password: 'password123',
+        name: 'Forbidden Doctor',
+        specialty: 'Кардиология',
+        role: 'DOCTOR',
+      }),
+    );
+    expect(err.code).toBe('FORBIDDEN');
   });
 
   // ───────────────────────── me
@@ -188,11 +250,9 @@ describe('users router (integration, real Postgres)', () => {
   it('pending as admin includes a freshly registered unapproved user', async () => {
     const publicCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
     const email = uniqueEmail('pending');
-    const registered = await publicCaller.users.register({
-      email,
-      password: 'password123',
-      name: 'Pending Approval Doctor',
-    });
+    const registered = await publicCaller.users.register(
+      completeRegistration(email, 'Pending Approval Doctor'),
+    );
     createdUserIds.push(registered.id);
 
     const adminCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: adminActor });
@@ -204,11 +264,9 @@ describe('users router (integration, real Postgres)', () => {
 
   it('approve rejects with TRPCError FORBIDDEN for a non-admin actor', async () => {
     const publicCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
-    const registered = await publicCaller.users.register({
-      email: uniqueEmail('approve-forbidden'),
-      password: 'password123',
-      name: 'Approve Forbidden Target',
-    });
+    const registered = await publicCaller.users.register(
+      completeRegistration(uniqueEmail('approve-forbidden'), 'Approve Forbidden Target'),
+    );
     createdUserIds.push(registered.id);
 
     const doctorCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: doctorActor });
@@ -218,11 +276,9 @@ describe('users router (integration, real Postgres)', () => {
 
   it('approve as admin sets approvedAt on the target user', async () => {
     const publicCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
-    const registered = await publicCaller.users.register({
-      email: uniqueEmail('approve-ok'),
-      password: 'password123',
-      name: 'Approve OK Target',
-    });
+    const registered = await publicCaller.users.register(
+      completeRegistration(uniqueEmail('approve-ok'), 'Approve OK Target'),
+    );
     createdUserIds.push(registered.id);
 
     const adminCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: adminActor });
@@ -235,11 +291,9 @@ describe('users router (integration, real Postgres)', () => {
 
   it('reject as admin deletes an unapproved target user', async () => {
     const publicCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
-    const registered = await publicCaller.users.register({
-      email: uniqueEmail('reject-ok'),
-      password: 'password123',
-      name: 'Reject OK Target',
-    });
+    const registered = await publicCaller.users.register(
+      completeRegistration(uniqueEmail('reject-ok'), 'Reject OK Target'),
+    );
 
     const adminCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: adminActor });
     const result = await adminCaller.users.reject(registered.id);
@@ -285,11 +339,9 @@ describe('users router (integration, real Postgres)', () => {
 
   it('delete as admin removes the target user', async () => {
     const publicCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: null });
-    const registered = await publicCaller.users.register({
-      email: uniqueEmail('delete-ok'),
-      password: 'password123',
-      name: 'Delete OK Target',
-    });
+    const registered = await publicCaller.users.register(
+      completeRegistration(uniqueEmail('delete-ok'), 'Delete OK Target'),
+    );
 
     const adminCaller = createCaller({ email: noopEmailSender, passwordResetBase: testPasswordResetBase, contactInboxEmail: testContactInboxEmail, actor: adminActor });
     const result = await adminCaller.users.delete(registered.id);

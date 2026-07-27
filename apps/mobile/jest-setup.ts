@@ -39,3 +39,27 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('expo-localization', () => ({
   getLocales: () => [{ languageCode: 'en', languageTag: 'en-US' }],
 }));
+
+// The unified app root now always mounts react-native-webview. Jest has no
+// native RNCWebViewModule, so expose a host View that retains all props for
+// route-shell and component assertions. Tests that need a specialised HTML
+// projection can still override this mock locally.
+jest.mock('react-native-webview', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    WebView: React.forwardRef(function MockWebView(
+      props: Record<string, unknown>,
+      ref: React.ForwardedRef<unknown>,
+    ) {
+      React.useImperativeHandle(ref, () => ({
+        goBack: jest.fn(),
+        reload: jest.fn(),
+      }));
+      return React.createElement(View, props);
+    }),
+  };
+});

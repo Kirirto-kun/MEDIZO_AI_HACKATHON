@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { login, getLoginLimiter } from '@docjob/auth';
+import { isDocJobMobileUserAgent } from '@docjob/types';
 import { assertSameOrigin } from '@/lib/csrf';
 import { setAuthCookies } from '@/lib/auth-cookies';
 import { signingKey } from '@/lib/auth-keys';
@@ -47,7 +48,15 @@ export async function POST(req: NextRequest) {
   const deviceLabel = typeof body.deviceLabel === 'string' ? body.deviceLabel : undefined;
 
   const result = await login(
-    { email: body.email, password: body.password, ip: clientIp(req), deviceLabel },
+    {
+      email: body.email,
+      password: body.password,
+      ip: clientIp(req),
+      deviceLabel,
+      ...(isDocJobMobileUserAgent(req.headers.get('user-agent'))
+        ? { allowedRoles: ['DOCTOR', 'REVIEWER'] as const }
+        : {}),
+    },
     signingKey(),
     limiter,
   );
@@ -86,6 +95,11 @@ export async function POST(req: NextRequest) {
       // Credentials were correct but the account isn't admin-approved yet.
       // Never issues tokens.
       return NextResponse.json({ status: 'pending' }, { status: 401 });
+    case 'unsupported_role':
+      // The embedded mobile surface intentionally has no admin panel.
+      // This result is returned before login() creates any access/refresh
+      // session state; desktop web admin login remains unchanged.
+      return NextResponse.json({ status: 'unsupported_role' }, { status: 403 });
     case 'invalid':
       // Unknown email or wrong password — deliberately indistinguishable
       // from `pending` at the network-timing level (see login.service.ts).

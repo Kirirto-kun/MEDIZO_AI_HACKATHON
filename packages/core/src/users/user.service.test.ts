@@ -14,6 +14,28 @@ import { ForbiddenError, UnauthorizedError, ValidationError } from '../shared/er
 import type { Actor } from '../shared/actor';
 import * as userService from './user.service';
 
+function completeRegistration(
+  email: string,
+  name: string,
+  role: 'DOCTOR' | 'REVIEWER' = 'DOCTOR',
+): userService.RegisterUserInput {
+  return {
+    email,
+    password: 'secret123',
+    name,
+    fullName: name,
+    region: 'astana',
+    age: 30,
+    specialty: 'Кардиология',
+    phoneNumber: '+7 700 000 00 00',
+    consentAccepted: true,
+    role,
+    ...(role === 'REVIEWER'
+      ? { workplace: 'Test Clinic', academicDegree: 'к.м.н.' }
+      : {}),
+  };
+}
+
 describe('user.service (integration, real Postgres)', () => {
   let adminUserId: string;
   let adminActor: Actor;
@@ -44,11 +66,9 @@ describe('user.service (integration, real Postgres)', () => {
 
   it('registerUser creates an unapproved user (approvedAt=null) with an argon2id-hashed password', async () => {
     const email = `core-register-${Date.now()}@test.local`;
-    const { id } = await userService.registerUser({
-      email,
-      password: 'secret123',
-      name: 'New Doctor',
-    });
+    const { id } = await userService.registerUser(
+      completeRegistration(email, 'New Doctor'),
+    );
     createdUserIds.push(id);
 
     const row = await prisma.user.findUnique({ where: { id } });
@@ -67,12 +87,9 @@ describe('user.service (integration, real Postgres)', () => {
     'registerUser permits public self-registration with role=%s',
     async (role) => {
       const email = `core-register-${role.toLowerCase()}-${Date.now()}@test.local`;
-      const { id } = await userService.registerUser({
-        email,
-        password: 'secret123',
-        name: `New ${role}`,
-        role,
-      });
+      const { id } = await userService.registerUser(
+        completeRegistration(email, `New ${role}`, role),
+      );
       createdUserIds.push(id);
 
       const row = await prisma.user.findUnique({ where: { id } });
@@ -84,9 +101,7 @@ describe('user.service (integration, real Postgres)', () => {
   it('registerUser rejects role=ADMIN and does not create an account', async () => {
     const email = `core-register-admin-${Date.now()}@test.local`;
     const maliciousInput = {
-      email,
-      password: 'secret123',
-      name: 'Self-proclaimed Admin',
+      ...completeRegistration(email, 'Self-proclaimed Admin'),
       role: 'ADMIN',
     } as unknown as userService.RegisterUserInput;
 
@@ -96,12 +111,61 @@ describe('user.service (integration, real Postgres)', () => {
 
   it('registerUser rejects a duplicate email (ConflictError → Russian message)', async () => {
     const email = `core-dup-${Date.now()}@test.local`;
-    const first = await userService.registerUser({ email, password: 'secret123', name: 'First' });
+    const first = await userService.registerUser(completeRegistration(email, 'First User'));
     createdUserIds.push(first.id);
 
     await expect(
-      userService.registerUser({ email, password: 'secret123', name: 'Second' }),
+      userService.registerUser(completeRegistration(email, 'Second User')),
     ).rejects.toThrow('Пользователь с такой почтой уже существует.');
+  });
+
+  it('registerUser rejects the legacy three-field mobile payload and creates no user', async () => {
+    const email = `core-incomplete-${Date.now()}@test.local`;
+
+    await expect(
+      userService.registerUser({ email, password: 'secret123', name: 'Legacy User' }),
+    ).rejects.toThrow(ValidationError);
+    expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+  });
+
+  it('registerUser requires reviewer workplace and academic degree', async () => {
+    const email = `core-reviewer-incomplete-${Date.now()}@test.local`;
+    const input = completeRegistration(email, 'Incomplete Reviewer', 'REVIEWER');
+    delete input.workplace;
+    delete input.academicDegree;
+
+    await expect(userService.registerUser(input)).rejects.toThrow(ValidationError);
+    expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+  });
+
+  it('createUser lets an admin provision an approved doctor without fabricating consent', async () => {
+    const email = `core-admin-create-${Date.now()}@test.local`;
+    const { id } = await userService.createUser(adminActor, {
+      email,
+      password: 'secret123',
+      name: 'Created Doctor',
+      specialty: 'Кардиология',
+      role: 'DOCTOR',
+    });
+    createdUserIds.push(id);
+
+    const row = await prisma.user.findUnique({ where: { id } });
+    expect(row?.email).toBe(email);
+    expect(row?.approvedAt).not.toBeNull();
+    expect(row?.consentAcceptedAt).toBeNull();
+    expect(await verifyPassword(row!.passwordHash, 'secret123')).toBe(true);
+  });
+
+  it('createUser rejects a non-admin actor', async () => {
+    await expect(
+      userService.createUser(nonAdminActor, {
+        email: `core-doctor-create-${Date.now()}@test.local`,
+        password: 'secret123',
+        name: 'Forbidden Doctor',
+        specialty: 'Кардиология',
+        role: 'DOCTOR',
+      }),
+    ).rejects.toThrow(ForbiddenError);
   });
 
   it('approveUser throws ForbiddenError for a non-admin actor', async () => {
@@ -113,11 +177,9 @@ describe('user.service (integration, real Postgres)', () => {
   });
 
   it('approveUser as admin sets approvedAt on a pending user', async () => {
-    const { id } = await userService.registerUser({
-      email: `core-approve-${Date.now()}@test.local`,
-      password: 'secret123',
-      name: 'Pending Doctor',
-    });
+    const { id } = await userService.registerUser(
+      completeRegistration(`core-approve-${Date.now()}@test.local`, 'Pending Doctor'),
+    );
     createdUserIds.push(id);
 
     const result = await userService.approveUser(adminActor, id);

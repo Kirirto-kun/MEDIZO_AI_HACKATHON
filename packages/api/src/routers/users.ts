@@ -32,6 +32,9 @@ import { getFixedWindowLimiter } from '../rate-limit-redis';
  *   This router matches core 1:1, same as `cases.update`/`tags.add`.
  * - `pending`       = adminProcedure. Core's `listPendingUsers` calls
  *   `assertAdmin`.
+ * - `create`        = adminProcedure. Core's `createUser` provisions an
+ *   approved DOCTOR/REVIEWER without pretending that the admin accepted
+ *   legal consent on the new user's behalf.
  * - `approve` / `reject` / `delete` = adminProcedure. Core's `approveUser` /
  *   `rejectUser` / `deleteUser` all call `assertAdmin` (the latter also does
  *   its own inline "admin can't delete themselves" check, left in core).
@@ -96,6 +99,10 @@ export const usersRouter = router({
   list: adminProcedure.query(({ ctx }) => core.users.listUsers(ctx.actor)),
 
   pending: adminProcedure.query(({ ctx }) => core.users.listPendingUsers(ctx.actor)),
+
+  create: adminProcedure
+    .input(z.custom<core.users.CreateUserInput>(isPlainObject))
+    .mutation(({ ctx, input }) => core.users.createUser(ctx.actor, input)),
 
   approve: adminProcedure
     .input(z.string())

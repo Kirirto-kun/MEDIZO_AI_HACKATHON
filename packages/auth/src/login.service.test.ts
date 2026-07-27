@@ -87,6 +87,43 @@ describe('login (integration, real Postgres)', () => {
     expect(result).toEqual({ status: 'pending' });
   });
 
+  it('rejects a valid ADMIN login when the client allows only DOCTOR/REVIEWER, before creating refresh state', async () => {
+    const email = uniqueEmail('mobile-admin');
+    const passwordHash = await hashPassword('correct horse battery staple');
+    const user = await makeUser({ email, passwordHash, approvedAt: new Date(), role: 'ADMIN' });
+
+    const result = await login(
+      {
+        email,
+        password: 'correct horse battery staple',
+        ip: '10.0.0.21',
+        allowedRoles: ['DOCTOR', 'REVIEWER'],
+      },
+      testKey,
+      createInMemoryLimiter(),
+    );
+
+    expect(result).toEqual({ status: 'unsupported_role' });
+    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it('keeps an approved ADMIN login unchanged when the client has no role restriction', async () => {
+    const email = uniqueEmail('desktop-admin');
+    const passwordHash = await hashPassword('correct horse battery staple');
+    const user = await makeUser({ email, passwordHash, approvedAt: new Date(), role: 'ADMIN' });
+
+    const result = await login(
+      { email, password: 'correct horse battery staple', ip: '10.0.0.22' },
+      testKey,
+      createInMemoryLimiter(),
+    );
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('expected ok');
+    expect(result.user.role).toBe('ADMIN');
+    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(1);
+  });
+
   it('wrong password -> invalid', async () => {
     const email = uniqueEmail('wrongpw');
     const passwordHash = await hashPassword('correct horse battery staple');

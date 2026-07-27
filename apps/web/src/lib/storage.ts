@@ -20,6 +20,8 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/svg+xml': '.svg',
 };
 
+export const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+
 async function ensureDir() {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
 }
@@ -30,6 +32,9 @@ export async function saveImage(
 ): Promise<{ filename: string; mimeType: string; url: string }> {
   if (!ALLOWED_MIME.has(mimeType)) {
     throw new Error(`Unsupported mime type: ${mimeType}`);
+  }
+  if (buffer.byteLength > MAX_IMAGE_SIZE) {
+    throw new Error('Файл слишком большой (лимит 5 МБ).');
   }
   await ensureDir();
   const ext = EXT_BY_MIME[mimeType];
@@ -83,7 +88,7 @@ const ATTACHMENT_MIME_EXT: Record<string, string> = {
   'text/csv': '.csv',
 };
 
-const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25 MB
+export const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
 export type AttachmentKind = 'image' | 'pdf' | 'document' | 'other';
 

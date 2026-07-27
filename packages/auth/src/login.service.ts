@@ -15,6 +15,7 @@ export type LoginResult =
       user: { id: string; role: Role; approvedAt: Date | null };
     }
   | { status: 'pending' } // credentials valid but not admin-approved
+  | { status: 'unsupported_role' } // credentials valid, but this client surface excludes the role
   | { status: 'invalid' } // wrong email/password (or unknown email)
   | { status: 'locked'; retryAfterSeconds: number };
 
@@ -69,11 +70,19 @@ function dummyHash(): Promise<string> {
  *     caller who doesn't know the password can't distinguish "no such
  *     account" from "account pending approval" from "wrong password" — all
  *     three look identical (`invalid`) until the real password is supplied.
- *  6. Approved → mint a short-lived access JWT + a fresh refresh-token
- *     family and return `ok`.
+ *  6. Optional client-surface role gate: a valid but unsupported role
+ *     returns `unsupported_role` before any session state is created.
+ *  7. Approved + allowed → mint a short-lived access JWT + a fresh
+ *     refresh-token family and return `ok`.
  */
 export async function login(
-  input: { email: string; password: string; ip: string; deviceLabel?: string },
+  input: {
+    email: string;
+    password: string;
+    ip: string;
+    deviceLabel?: string;
+    allowedRoles?: readonly Role[];
+  },
   key: SigningKey,
   limiter: AttemptLimiter = defaultLimiter,
 ): Promise<LoginResult> {
@@ -111,6 +120,13 @@ export async function login(
 
   if (!user.approvedAt) {
     return { status: 'pending' };
+  }
+
+  // Client-surface role restrictions must run before either token is minted.
+  // In particular, the embedded mobile app intentionally supports only the
+  // DOCTOR and REVIEWER experiences; ADMIN remains web-desktop-only.
+  if (input.allowedRoles && !input.allowedRoles.includes(user.role)) {
+    return { status: 'unsupported_role' };
   }
 
   const access = await signAccessToken(

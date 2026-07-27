@@ -38,19 +38,68 @@ const submissionInclude = {
 /**
  * Resolve a set of pre-uploaded `CaseAttachment` ids into the small
  * `SerializedSubmissionAttachment` shape stored on `CaseSubmissionMessage.attachments`
- * (a JSON blob, not a live relation). Moved verbatim from actions.ts.
+ * (a JSON blob, not a live relation). Non-admin callers may resolve only
+ * their own still-unclaimed uploads; admins may use any unclaimed upload.
  */
-async function attachmentsForIds(ids: string[]): Promise<SerializedSubmissionAttachment[]> {
+async function attachmentsForIds(
+  tx: Prisma.TransactionClient,
+  ids: string[],
+  actor: Actor,
+): Promise<SerializedSubmissionAttachment[]> {
   if (!ids.length) return [];
-  const rows = await prisma.caseAttachment.findMany({ where: { id: { in: ids } } });
-  return rows.map((a) => ({
-    attachmentId: a.id,
-    filename: a.filename,
-    originalName: a.originalName,
-    url: `/api/attachments/${a.filename}`,
-    mimeType: a.mimeType,
-    size: a.size,
-  }));
+
+  const uniqueIds = [...new Set(ids)];
+  const rows = await tx.caseAttachment.findMany({
+    where: {
+      id: { in: uniqueIds },
+      caseId: null,
+      submissionMessageId: null,
+      ...(actor.role === 'ADMIN' ? {} : { uploaderId: actor.id }),
+    },
+  });
+  if (rows.length !== uniqueIds.length) {
+    throw new ValidationError('Один или несколько файлов недоступны.');
+  }
+
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  return uniqueIds.map((id) => {
+    const attachment = rowsById.get(id);
+    if (!attachment) {
+      throw new ValidationError('Один или несколько файлов недоступны.');
+    }
+    return {
+      attachmentId: attachment.id,
+      filename: attachment.filename,
+      originalName: attachment.originalName,
+      url: `/api/attachments/${attachment.filename}`,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+    };
+  });
+}
+
+async function claimAttachments(
+  tx: Prisma.TransactionClient,
+  ids: string[],
+  actor: Actor,
+  submissionMessageId: string,
+): Promise<void> {
+  if (!ids.length) return;
+  const uniqueIds = [...new Set(ids)];
+  const claimed = await tx.caseAttachment.updateMany({
+    where: {
+      id: { in: uniqueIds },
+      caseId: null,
+      submissionMessageId: null,
+      ...(actor.role === 'ADMIN' ? {} : { uploaderId: actor.id }),
+    },
+    data: { submissionMessageId },
+  });
+  if (claimed.count !== uniqueIds.length) {
+    // A concurrent request claimed at least one ID after the read. Throwing
+    // inside the transaction rolls back the message and every partial claim.
+    throw new ValidationError('Один или несколько файлов уже используются.');
+  }
 }
 
 // ───────────────────────── Writes
@@ -72,9 +121,10 @@ export async function createCaseSubmission(
     throw new ValidationError(parsed.error.issues[0]?.message ?? 'Некорректные данные предложения.');
   }
   const authors = parsed.data.authors.map((a) => a.trim()).filter(Boolean);
-  const attachments = await attachmentsForIds(parsed.data.attachmentIds ?? []);
+  const attachmentIds = parsed.data.attachmentIds ?? [];
 
   const created = await prisma.$transaction(async (tx) => {
+    const attachments = await attachmentsForIds(tx, attachmentIds, user);
     const submission = await tx.caseSubmission.create({
       data: {
         authorUserId: user.id,
@@ -85,7 +135,7 @@ export async function createCaseSubmission(
       },
     });
 
-    await tx.caseSubmissionMessage.create({
+    const openingMessage = await tx.caseSubmissionMessage.create({
       data: {
         submissionId: submission.id,
         senderId: user.id,
@@ -94,13 +144,7 @@ export async function createCaseSubmission(
       },
       select: { id: true },
     });
-
-    if (parsed.data.attachmentIds?.length) {
-      await tx.caseAttachment.updateMany({
-        where: { id: { in: parsed.data.attachmentIds }, caseId: null },
-        data: { uploaderId: user.id },
-      });
-    }
+    await claimAttachments(tx, attachmentIds, user, openingMessage.id);
 
     return { submissionId: submission.id };
   });
@@ -126,29 +170,33 @@ export async function sendCaseSubmissionMessage(
     throw new ValidationError(parsed.error.issues[0]?.message ?? 'Некорректные данные сообщения.');
   }
 
-  const submission = await prisma.caseSubmission.findUnique({
-    where: { id: parsed.data.submissionId },
-    select: { id: true, authorUserId: true },
-  });
-  if (!submission) throw new NotFoundError('Предложение не найдено.');
-  if (submission.authorUserId !== user.id && user.role !== 'ADMIN') {
-    throw new ForbiddenError('Недостаточно прав для отправки сообщения.');
-  }
+  const attachmentIds = parsed.data.attachmentIds ?? [];
+  const { created, attachments } = await prisma.$transaction(async (tx) => {
+    const submission = await tx.caseSubmission.findUnique({
+      where: { id: parsed.data.submissionId },
+      select: { id: true, authorUserId: true },
+    });
+    if (!submission) throw new NotFoundError('Предложение не найдено.');
+    if (submission.authorUserId !== user.id && user.role !== 'ADMIN') {
+      throw new ForbiddenError('Недостаточно прав для отправки сообщения.');
+    }
 
-  const attachments = await attachmentsForIds(parsed.data.attachmentIds ?? []);
-  const created = await prisma.caseSubmissionMessage.create({
-    data: {
-      submissionId: parsed.data.submissionId,
-      senderId: user.id,
-      body: parsed.data.body.trim(),
-      attachments: attachments as unknown as Prisma.InputJsonValue,
-    },
-    include: { sender: { select: { id: true, name: true, fullName: true, role: true } } },
-  });
-
-  await prisma.caseSubmission.update({
-    where: { id: parsed.data.submissionId },
-    data: { updatedAt: new Date() },
+    const attachments = await attachmentsForIds(tx, attachmentIds, user);
+    const created = await tx.caseSubmissionMessage.create({
+      data: {
+        submissionId: parsed.data.submissionId,
+        senderId: user.id,
+        body: parsed.data.body.trim(),
+        attachments: attachments as unknown as Prisma.InputJsonValue,
+      },
+      include: { sender: { select: { id: true, name: true, fullName: true, role: true } } },
+    });
+    await claimAttachments(tx, attachmentIds, user, created.id);
+    await tx.caseSubmission.update({
+      where: { id: parsed.data.submissionId },
+      data: { updatedAt: new Date() },
+    });
+    return { created, attachments };
   });
 
   return {

@@ -17,12 +17,16 @@ import {
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  name: z.string().min(1),
+  name: z.string().min(2),
   fullName: z.string().optional(),
   region: z.string().optional(),
-  age: z.coerce.number().int().positive().optional(),
+  age: z.coerce.number().int().min(16).max(100).optional(),
   specialty: z.string().optional(),
-  phoneNumber: z.string().optional(),
+  phoneNumber: z
+    .string()
+    .min(7)
+    .regex(/^[\d +\-()]+$/)
+    .optional(),
   workplace: z.string().optional(),
   academicDegree: z.string().optional(),
   consentAccepted: z.boolean().optional(),
@@ -31,8 +35,48 @@ const registerSchema = z.object({
   // anonymous caller. Doctors and reviewers are both intentional public
   // registration paths and remain available here.
   role: z.enum(['DOCTOR', 'REVIEWER']).optional(),
+}).superRefine((data, ctx) => {
+  const requireText = (value: string | undefined, path: string, minimum = 1) => {
+    if (!value || value.trim().length < minimum) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: 'Required' });
+    }
+  };
+
+  requireText(data.fullName, 'fullName', 2);
+  requireText(data.region, 'region');
+  requireText(data.specialty, 'specialty');
+  requireText(data.phoneNumber, 'phoneNumber', 7);
+  if (data.age === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['age'], message: 'Required' });
+  }
+  if (data.consentAccepted !== true) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['consentAccepted'], message: 'Required' });
+  }
+  if (data.role === 'REVIEWER') {
+    requireText(data.workplace, 'workplace', 2);
+    requireText(data.academicDegree, 'academicDegree', 2);
+  }
 });
 export type RegisterUserInput = z.infer<typeof registerSchema>;
+
+const createUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  name: z.string().min(2),
+  fullName: z.string().optional(),
+  region: z.string().optional(),
+  age: z.coerce.number().int().min(16).max(100).optional(),
+  specialty: z.string().min(1),
+  phoneNumber: z
+    .string()
+    .min(7)
+    .regex(/^[\d +\-()]+$/)
+    .optional(),
+  workplace: z.string().optional(),
+  academicDegree: z.string().optional(),
+  role: z.enum(['DOCTOR', 'REVIEWER']),
+});
+export type CreateUserInput = z.infer<typeof createUserSchema>;
 
 const updateUserSchema = z.object({
   id: z.string(),
@@ -85,6 +129,50 @@ export async function registerUser(input: RegisterUserInput): Promise<{ id: stri
       academicDegree: data.academicDegree,
       role: data.role ?? 'DOCTOR',
       consentAcceptedAt: data.consentAccepted ? new Date() : null,
+    },
+    select: { id: true },
+  });
+  return { id: created.id };
+}
+
+/**
+ * Administrative account provisioning is deliberately separate from public
+ * self-registration. It does not fabricate a consent acceptance on the
+ * user's behalf and creates the account already approved, matching the
+ * desktop "Добавить врача" workflow.
+ */
+export async function createUser(
+  actor: Actor | null,
+  input: CreateUserInput,
+): Promise<{ id: string }> {
+  assertAdmin(actor, 'Только администратор может создавать пользователей.');
+  const parsed = createUserSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError('Проверьте правильность заполнения формы.');
+  }
+  const data = parsed.data;
+  const email = data.email.toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    throw new ConflictError('Пользователь с такой почтой уже существует.');
+  }
+
+  const passwordHash = await hashPassword(data.password);
+  const created = await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      name: data.name,
+      fullName: data.fullName,
+      region: data.region,
+      age: data.age,
+      specialty: data.specialty,
+      phoneNumber: data.phoneNumber,
+      workplace: data.workplace,
+      academicDegree: data.academicDegree,
+      role: data.role,
+      approvedAt: new Date(),
+      consentAcceptedAt: null,
     },
     select: { id: true },
   });

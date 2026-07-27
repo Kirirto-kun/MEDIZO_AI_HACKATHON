@@ -6,8 +6,9 @@ import type { NextRequest } from 'next/server';
 // `@node-rs/argon2` binding, neither of which can be bundled for the Edge
 // runtime this middleware compiles to. See `packages/auth/src/tokens.ts`'s
 // file-header comment.
-import { verifyAccessToken } from '@docjob/auth/tokens';
-import { getAccessToken } from '@/lib/auth-cookies';
+import { verifyAccessToken, type AccessClaims } from '@docjob/auth/tokens';
+import { isDocJobMobileUserAgent } from '@docjob/types';
+import { clearAuthCookies, getAccessToken } from '@/lib/auth-cookies';
 import { verificationKeys } from '@/lib/auth-keys';
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from '@/i18n/config';
 
@@ -66,20 +67,45 @@ function ensureLocaleCookie(req: NextRequest, res: NextResponse): NextResponse {
  * doing the refresh (Prisma + a fresh JWT sign) inside middleware itself
  * would require Node APIs this Edge runtime can't run.
  */
-async function isAuthenticated(req: NextRequest): Promise<boolean> {
+async function authenticatedClaims(req: NextRequest): Promise<AccessClaims | null> {
   const token = getAccessToken(req.cookies);
-  if (!token) return false;
-  const claims = await verifyAccessToken(token, verificationKeys());
-  return claims !== null;
+  if (!token) return null;
+  return verifyAccessToken(token, verificationKeys());
 }
 
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const authenticated = await isAuthenticated(req);
+  const claims = await authenticatedClaims(req);
+  const authenticated = claims !== null;
+
+  // The embedded Android surface deliberately exposes only DOCTOR and
+  // REVIEWER UI. Reject a pre-existing ADMIN access cookie as a defence in
+  // depth (for example, a cookie created before this role gate shipped),
+  // clear both auth cookies, and explain why the user was signed out.
+  if (
+    claims?.role === 'ADMIN' &&
+    isDocJobMobileUserAgent(req.headers.get('user-agent'))
+  ) {
+    const alreadyOnReasonedLogin =
+      pathname === '/login' && req.nextUrl.searchParams.get('mobileAdmin') === '1';
+    const res = alreadyOnReasonedLogin
+      ? NextResponse.next()
+      : NextResponse.redirect(new URL('/login?mobileAdmin=1', req.url));
+    clearAuthCookies(res);
+    return ensureLocaleCookie(req, res);
+  }
 
   // Unauthenticated visitors hitting the bare domain see the landing page,
-  // not the login form. Authenticated users continue to the dashboard.
+  // not the login form. The installed mobile shell is an application rather
+  // than a marketing surface, so it opens login and can silently restore a
+  // still-valid refresh cookie when the short-lived access cookie expired.
+  // Authenticated users continue to the dashboard.
   if (pathname === '/' && !authenticated) {
+    if (isDocJobMobileUserAgent(req.headers.get('user-agent'))) {
+      const loginUrl = new URL('/login', req.url);
+      loginUrl.searchParams.set('callbackUrl', '/');
+      return ensureLocaleCookie(req, NextResponse.redirect(loginUrl));
+    }
     return ensureLocaleCookie(req, NextResponse.redirect(new URL('/landing', req.url)));
   }
 
@@ -125,7 +151,7 @@ export default async function middleware(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const loginUrl = new URL('/login', req.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
+    loginUrl.searchParams.set('callbackUrl', pathname + req.nextUrl.search);
     return ensureLocaleCookie(req, NextResponse.redirect(loginUrl));
   }
   return ensureLocaleCookie(req, NextResponse.next());

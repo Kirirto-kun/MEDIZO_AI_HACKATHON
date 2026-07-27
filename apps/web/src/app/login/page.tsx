@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -17,6 +17,7 @@ import { DocJobLogo } from '@/components/icons';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { Loader2 } from 'lucide-react';
 import { useUserStore } from '@/hooks/use-user-store';
+import { safeReturnPath } from '@/lib/safe-return-path';
 
 function LoginForm() {
   const router = useRouter();
@@ -26,6 +27,52 @@ function LoginForm() {
   const t = useTranslations('auth.login');
   const [isLoading, setIsLoading] = useState(false);
   const justRegistered = searchParams.get('pending') === '1';
+  const mobileAdminBlocked = searchParams.get('mobileAdmin') === '1';
+  const callbackUrl = safeReturnPath(searchParams.get('callbackUrl'));
+  const [isRestoringSession, setIsRestoringSession] = useState(
+    !justRegistered && !mobileAdminBlocked,
+  );
+
+  useEffect(() => {
+    if (justRegistered || mobileAdminBlocked) {
+      setIsRestoringSession(false);
+      return;
+    }
+
+    let active = true;
+    setIsRestoringSession(true);
+    void fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'same-origin',
+    })
+      .then(async (res) => {
+        if (!active) return;
+        if (res.ok) {
+          // A full document navigation remounts the root UserProvider. A
+          // client-only router transition would keep the parallel, earlier
+          // `/api/auth/me` result (`null` from the expired access cookie)
+          // and immediately bounce the restored session back to /login.
+          window.location.replace(callbackUrl);
+          return;
+        }
+        if (res.status === 403) {
+          const body = (await res.json().catch(() => ({}))) as { status?: string };
+          if (body.status === 'unsupported_role') {
+            window.location.replace('/login?mobileAdmin=1');
+          }
+        }
+      })
+      .catch(() => {
+        // Keep the login form usable when session restoration is unavailable.
+      })
+      .finally(() => {
+        if (active) setIsRestoringSession(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [callbackUrl, justRegistered, mobileAdminBlocked]);
 
   const loginSchema = z.object({
     email: z.string().email(t('errors.emailInvalid')),
@@ -48,19 +95,35 @@ function LoginForm() {
 
     if (res.ok) {
       toast({ title: t('toast.successTitle'), description: t('toast.successDescription') });
-      router.push(searchParams.get('callbackUrl') ?? '/');
+      router.push(callbackUrl);
       router.refresh();
     } else {
       const isPending = res.reason === 'pending';
+      const isUnsupportedRole = res.reason === 'unsupported_role';
       toast({
         variant: 'destructive',
-        title: isPending ? t('toast.pendingTitle') : t('toast.failTitle'),
+        title: isPending
+          ? t('toast.pendingTitle')
+          : isUnsupportedRole
+            ? t('toast.mobileAdminTitle')
+            : t('toast.failTitle'),
         description: isPending
           ? t('toast.pendingDescription')
+          : isUnsupportedRole
+            ? t('toast.mobileAdminDescription')
           : (res.error ?? t('toast.failDescription')),
       });
     }
   };
+
+  if (isRestoringSession) {
+    return (
+      <div className="flex min-h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>{t('loading')}</span>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -69,6 +132,14 @@ function LoginForm() {
           <p className="font-medium">{t('pendingBanner.title')}</p>
           <p className="mt-1 text-xs leading-relaxed text-amber-200/85">
             {t('pendingBanner.body')}
+          </p>
+        </div>
+      ) : null}
+      {mobileAdminBlocked ? (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <p className="font-medium">{t('mobileAdminBanner.title')}</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-200/85">
+            {t('mobileAdminBanner.body')}
           </p>
         </div>
       ) : null}
@@ -94,8 +165,8 @@ function LoginForm() {
 export default function LoginPage() {
   const t = useTranslations('auth.login');
   return (
-    <div className="relative flex items-center justify-center min-h-screen bg-background">
-      <div className="absolute right-4 top-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4 pt-16 sm:pt-4">
+      <div className="absolute right-4 top-4 z-10">
         <LanguageSwitcher variant="outline" />
       </div>
       <Card className="w-full max-w-sm">
@@ -118,7 +189,7 @@ export default function LoginPage() {
           </div>
           <div className="mt-3 text-center text-sm">
             <Link href="/forgot-password" className="text-muted-foreground hover:text-primary hover:underline">
-              Забыли пароль?
+              {t('forgotPassword')}
             </Link>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">

@@ -45,7 +45,7 @@ function serializedToUser(s: CoreSerializedUser): User {
 export type LoginResult = {
   ok: boolean;
   error?: string;
-  reason?: 'pending' | 'invalid' | 'network';
+  reason?: 'pending' | 'unsupported_role' | 'invalid' | 'network';
 };
 
 type UserStore = {
@@ -123,23 +123,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const currentUser = meUser;
 
-  const registerMutation = trpc.users.register.useMutation();
+  const createUserMutation = trpc.users.create.useMutation();
   const addUser = useCallback(
     async (user: Omit<User, 'role'> & { role: Exclude<UserRole, 'admin'>; password?: string }) => {
-      await registerMutation.mutateAsync({
+      await createUserMutation.mutateAsync({
         email: user.email,
         password: user.password ?? 'changeme123',
         name: user.name,
         fullName: user.fullName ?? undefined,
         region: user.region ?? undefined,
         age: user.age ?? undefined,
-        specialty: user.specialty || undefined,
+        specialty: user.specialty,
         phoneNumber: user.phoneNumber ?? undefined,
+        workplace: user.workplace ?? undefined,
+        academicDegree: user.academicDegree ?? undefined,
         role: user.role === 'reviewer' ? 'REVIEWER' : 'DOCTOR',
       });
       await utils.users.list.invalidate();
     },
-    [registerMutation, utils],
+    [createUserMutation, utils],
   );
 
   const updateProfileMutation = trpc.users.updateProfile.useMutation();
@@ -186,12 +188,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
 
       const body = (await res.json().catch(() => ({}))) as {
-        status?: 'pending' | 'invalid' | 'locked';
+        status?: 'pending' | 'unsupported_role' | 'invalid' | 'locked';
         retryAfterSeconds?: number;
       };
 
       if (body.status === 'pending') {
         return { ok: false, error: 'PendingApproval', reason: 'pending' };
+      }
+      if (body.status === 'unsupported_role') {
+        return { ok: false, error: 'UnsupportedRole', reason: 'unsupported_role' };
       }
       if (body.status === 'locked') {
         const wait = body.retryAfterSeconds ?? 60;

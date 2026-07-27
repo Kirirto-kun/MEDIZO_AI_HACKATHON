@@ -10,25 +10,28 @@ import Constants from 'expo-constants';
  *  2. `process.env.EXPO_PUBLIC_API_URL` (Expo's `EXPO_PUBLIC_`-prefixed env
  *     vars are inlined into the JS bundle by Metro at build time, so this
  *     works the same way in dev and in a built app).
- *  3. `http://localhost:3000` — the Next.js dev server default (`pnpm dev`
- *     in `apps/web`), for local development against a simulator/emulator
- *     with no other config present.
+ *  3. A development bundle uses `http://localhost:3000`; a production
+ *     bundle fails safe to `https://docjob.kz` if no build-time URL was set.
  *
  * Resolved once at module load (not read on every call) since none of these
  * sources change at runtime.
  */
 function resolveApiBaseUrl(): string {
   const extra = Constants.expoConfig?.extra as { apiUrl?: unknown } | undefined;
-  if (typeof extra?.apiUrl === 'string' && extra.apiUrl.length > 0) {
-    return extra.apiUrl;
+  if (typeof extra?.apiUrl === 'string' && extra.apiUrl.trim().length > 0) {
+    return extra.apiUrl.trim().replace(/\/+$/, '');
   }
 
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (typeof envUrl === 'string' && envUrl.length > 0) {
-    return envUrl;
+  if (typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '');
   }
 
-  return 'http://localhost:3000';
+  const developmentBuild =
+    typeof __DEV__ !== 'undefined'
+      ? __DEV__
+      : process.env.NODE_ENV !== 'production';
+  return developmentBuild ? 'http://localhost:3000' : 'https://docjob.kz';
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

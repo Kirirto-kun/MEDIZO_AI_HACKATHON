@@ -106,6 +106,8 @@ model CaseAttachment {
   id        String   @id @default(cuid())
   caseId    String?
   case      Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  submissionMessageId String?
+  submissionMessage CaseSubmissionMessage? @relation(fields: [submissionMessageId], references: [id], onDelete: SetNull)
   uploaderId String?
   filename  String
   originalName String?
@@ -118,6 +120,7 @@ model CaseAttachment {
   createdAt DateTime @default(now())
 
   @@index([caseId])
+  @@index([submissionMessageId])
   @@index([uploaderId])
 }
 
@@ -181,6 +184,7 @@ model CaseSubmissionMessage {
   sender       User           @relation("SubmissionMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   body         String         @db.Text
   attachments  Json           @default("[]")
+  attachmentRecords CaseAttachment[]
   createdAt    DateTime       @default(now())
 
   @@index([submissionId])

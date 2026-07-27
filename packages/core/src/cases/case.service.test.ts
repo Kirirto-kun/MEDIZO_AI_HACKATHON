@@ -11,7 +11,12 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '@docjob/db';
-import { ForbiddenError, NotFoundError, UnauthorizedError } from '../shared/errors';
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '../shared/errors';
 import type { Actor } from '../shared/actor';
 import * as caseService from './case.service';
 
@@ -20,6 +25,8 @@ describe('case.service (integration, real Postgres)', () => {
   let adminActor: Actor;
   const nonAdminActor: Actor = { id: 'not-a-real-user', role: 'DOCTOR', approvedAt: new Date() };
   const createdCaseIds: string[] = [];
+  const createdSubmissionIds: string[] = [];
+  const createdAttachmentIds: string[] = [];
 
   beforeAll(async () => {
     const admin = await prisma.user.create({
@@ -39,6 +46,12 @@ describe('case.service (integration, real Postgres)', () => {
   afterAll(async () => {
     if (createdCaseIds.length) {
       await prisma.case.deleteMany({ where: { id: { in: createdCaseIds } } });
+    }
+    if (createdSubmissionIds.length) {
+      await prisma.caseSubmission.deleteMany({ where: { id: { in: createdSubmissionIds } } });
+    }
+    if (createdAttachmentIds.length) {
+      await prisma.caseAttachment.deleteMany({ where: { id: { in: createdAttachmentIds } } });
     }
     await prisma.user.delete({ where: { id: adminUserId } });
   });
@@ -94,6 +107,49 @@ describe('case.service (integration, real Postgres)', () => {
       name: 'Core Test Update Case (updated)',
     });
     expect(updated.name).toBe('Core Test Update Case (updated)');
+  });
+
+  it('cannot claim a submission message attachment for a catalog case', async () => {
+    const submission = await prisma.caseSubmission.create({
+      data: {
+        authorUserId: adminUserId,
+        title: 'Attachment ownership test',
+        description: 'Submission used to test mutually exclusive ownership.',
+      },
+    });
+    createdSubmissionIds.push(submission.id);
+    const message = await prisma.caseSubmissionMessage.create({
+      data: {
+        submissionId: submission.id,
+        senderId: adminUserId,
+        body: 'Opening message.',
+      },
+    });
+    const attachment = await prisma.caseAttachment.create({
+      data: {
+        uploaderId: adminUserId,
+        submissionMessageId: message.id,
+        filename: `claimed-${Date.now()}.pdf`,
+        originalName: 'claimed.pdf',
+        mimeType: 'application/pdf',
+        size: 123,
+        kind: 'pdf',
+      },
+    });
+    createdAttachmentIds.push(attachment.id);
+
+    await expect(
+      caseService.createCase(adminActor, {
+        name: 'Must roll back when attachment is already claimed',
+        attachmentIds: [attachment.id],
+      }),
+    ).rejects.toThrow(ValidationError);
+
+    expect(
+      await prisma.case.count({
+        where: { name: 'Must roll back when attachment is already claimed' },
+      }),
+    ).toBe(0);
   });
 
   it('listCases filters by subgroup', async () => {

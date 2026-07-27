@@ -15,7 +15,12 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '@docjob/db';
-import { ForbiddenError, NotFoundError, UnauthorizedError } from '../shared/errors';
+import {
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '../shared/errors';
 import type { Actor } from '../shared/actor';
 import * as submissionService from './submission.service';
 
@@ -27,6 +32,7 @@ describe('submission.service (integration, real Postgres)', () => {
   let strangerUserId: string;
   let strangerActor: Actor;
   const createdSubmissionIds: string[] = [];
+  const createdAttachmentIds: string[] = [];
 
   beforeAll(async () => {
     const suffix = Date.now();
@@ -74,10 +80,31 @@ describe('submission.service (integration, real Postgres)', () => {
     if (createdSubmissionIds.length) {
       await prisma.caseSubmission.deleteMany({ where: { id: { in: createdSubmissionIds } } });
     }
-    await prisma.user.deleteMany({
-      where: { id: { in: [adminUserId, authorUserId, strangerUserId] } },
-    });
+    if (createdAttachmentIds.length) {
+      await prisma.caseAttachment.deleteMany({ where: { id: { in: createdAttachmentIds } } });
+    }
+    const userIds = [adminUserId, authorUserId, strangerUserId].filter(
+      (id): id is string => Boolean(id),
+    );
+    if (userIds.length) {
+      await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+    }
   });
+
+  async function createUploadedAttachment(uploaderId: string, tag: string) {
+    const attachment = await prisma.caseAttachment.create({
+      data: {
+        uploaderId,
+        filename: `${tag}-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`,
+        originalName: `${tag}.pdf`,
+        mimeType: 'application/pdf',
+        size: 123,
+        kind: 'pdf',
+      },
+    });
+    createdAttachmentIds.push(attachment.id);
+    return attachment;
+  }
 
   it('createCaseSubmission throws UnauthorizedError for no actor', async () => {
     await expect(
@@ -107,6 +134,55 @@ describe('submission.service (integration, real Postgres)', () => {
     expect(result.messages[0].body).toBe(
       'A sufficiently long description of the case, for validation.',
     );
+  });
+
+  it('createCaseSubmission accepts the author\'s own pre-uploaded attachment', async () => {
+    const attachment = await createUploadedAttachment(authorUserId, 'own-opening');
+
+    const result = await submissionService.createCaseSubmission(authorActor, {
+      title: 'Submission with own attachment',
+      description: 'A sufficiently long description with an owned attachment.',
+      authors: [],
+      attachmentIds: [attachment.id],
+    });
+    createdSubmissionIds.push(result.id);
+
+    expect(result.messages[0].attachments).toEqual([
+      expect.objectContaining({
+        attachmentId: attachment.id,
+        filename: attachment.filename,
+        originalName: attachment.originalName,
+      }),
+    ]);
+    const claimed = await prisma.caseAttachment.findUnique({
+      where: { id: attachment.id },
+      select: { caseId: true, submissionMessageId: true },
+    });
+    expect(claimed).toEqual({
+      caseId: null,
+      submissionMessageId: result.messages[0].id,
+    });
+
+    await expect(
+      submissionService.sendCaseSubmissionMessage(authorActor, {
+        submissionId: result.id,
+        body: 'The same upload cannot be attached a second time.',
+        attachmentIds: [attachment.id],
+      }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it('createCaseSubmission rejects another user\'s pre-uploaded attachment', async () => {
+    const attachment = await createUploadedAttachment(strangerUserId, 'foreign-opening');
+
+    await expect(
+      submissionService.createCaseSubmission(authorActor, {
+        title: 'Submission claiming a foreign attachment',
+        description: 'A sufficiently long description with a foreign attachment.',
+        authors: [],
+        attachmentIds: [attachment.id],
+      }),
+    ).rejects.toThrow(ValidationError);
   });
 
   it('createCaseSubmission rejects a too-short title with the original Russian validation message', async () => {
@@ -205,6 +281,85 @@ describe('submission.service (integration, real Postgres)', () => {
         body: 'I should not be able to post this.',
       }),
     ).rejects.toThrow('Недостаточно прав для отправки сообщения.');
+  });
+
+  it('sendCaseSubmissionMessage rejects an attachment owned by someone else', async () => {
+    const created = await submissionService.createCaseSubmission(authorActor, {
+      title: 'Foreign message attachment',
+      description: 'A sufficiently long description of the case.',
+      authors: [],
+    });
+    createdSubmissionIds.push(created.id);
+    const attachment = await createUploadedAttachment(strangerUserId, 'foreign-message');
+
+    await expect(
+      submissionService.sendCaseSubmissionMessage(authorActor, {
+        submissionId: created.id,
+        body: 'This message must not claim a foreign upload.',
+        attachmentIds: [attachment.id],
+      }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it('sendCaseSubmissionMessage lets an admin attach an existing user upload', async () => {
+    const created = await submissionService.createCaseSubmission(authorActor, {
+      title: 'Admin attachment response',
+      description: 'A sufficiently long description of the case.',
+      authors: [],
+    });
+    createdSubmissionIds.push(created.id);
+    const attachment = await createUploadedAttachment(strangerUserId, 'admin-message');
+
+    const message = await submissionService.sendCaseSubmissionMessage(adminActor, {
+      submissionId: created.id,
+      body: 'Admin response with an existing supporting upload.',
+      attachmentIds: [attachment.id],
+    });
+
+    expect(message.attachments).toEqual([
+      expect.objectContaining({
+        attachmentId: attachment.id,
+        filename: attachment.filename,
+      }),
+    ]);
+  });
+
+  it('atomically allows only one concurrent message to claim an upload', async () => {
+    const created = await submissionService.createCaseSubmission(authorActor, {
+      title: 'Concurrent attachment claim',
+      description: 'A sufficiently long description of the concurrent claim case.',
+      authors: [],
+    });
+    createdSubmissionIds.push(created.id);
+    const attachment = await createUploadedAttachment(authorUserId, 'concurrent-message');
+
+    const results = await Promise.allSettled([
+      submissionService.sendCaseSubmissionMessage(authorActor, {
+        submissionId: created.id,
+        body: 'First concurrent attachment claim.',
+        attachmentIds: [attachment.id],
+      }),
+      submissionService.sendCaseSubmissionMessage(authorActor, {
+        submissionId: created.id,
+        body: 'Second concurrent attachment claim.',
+        attachmentIds: [attachment.id],
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected');
+    // A one-connection local Prisma pool may reject the competing
+    // transaction before it starts (P2028); a larger pool reaches the
+    // updateMany guard and returns ValidationError. Both outcomes prove the
+    // contract that only one request can commit the claim.
+    expect(rejected?.status).toBe('rejected');
+    expect(rejected && rejected.status === 'rejected' && rejected.reason).toBeInstanceOf(Error);
+
+    const claimed = await prisma.caseAttachment.findUnique({
+      where: { id: attachment.id },
+      select: { submissionMessageId: true },
+    });
+    expect(claimed?.submissionMessageId).toBeTruthy();
   });
 
   it('sendCaseSubmissionMessage throws NotFoundError for a missing submission', async () => {

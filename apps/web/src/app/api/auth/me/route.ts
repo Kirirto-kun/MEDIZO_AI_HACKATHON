@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@docjob/auth';
 import * as core from '@docjob/core';
-import { getAccessToken } from '@/lib/auth-cookies';
+import { isDocJobMobileUserAgent } from '@docjob/types';
+import { clearAuthCookies, getAccessToken } from '@/lib/auth-cookies';
 import { bearerToken } from '@/lib/session';
 import { verificationKeys } from '@/lib/auth-keys';
 
@@ -30,5 +31,19 @@ export async function GET(req: NextRequest) {
   }
 
   const user = await core.users.getUserById(claims.sub);
+  // Re-check the current database role instead of trusting the short-lived
+  // JWT claim. This closes the role-change window where a user promoted to
+  // ADMIN could otherwise keep rendering an already-open mobile session.
+  if (
+    user?.role === 'ADMIN' &&
+    isDocJobMobileUserAgent(req.headers.get('user-agent'))
+  ) {
+    const res = NextResponse.json(
+      { user: null, status: 'unsupported_role' },
+      { status: 403 },
+    );
+    clearAuthCookies(res);
+    return res;
+  }
   return NextResponse.json({ user });
 }
