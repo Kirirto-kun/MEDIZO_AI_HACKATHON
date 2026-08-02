@@ -36,7 +36,7 @@ export default function DashboardLayout({ children, sidebarContent }: DashboardL
     <SidebarProvider>
       <div
         onMouseMove={handleMouseMove}
-        className="relative flex h-screen w-full overflow-hidden bg-background text-foreground"
+        className="relative flex h-screen h-dvh min-h-0 w-full max-w-full overflow-hidden bg-background text-foreground"
       >
         <motion.div
           className="pointer-events-none fixed left-0 top-0 z-0 h-96 w-96 rounded-full opacity-50 blur-[100px]"
@@ -66,8 +66,8 @@ export default function DashboardLayout({ children, sidebarContent }: DashboardL
           <div className="flex flex-1 flex-col overflow-y-auto">{sidebarContent}</div>
         </Sidebar>
 
-        <div className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-16 shrink-0 items-center gap-4 border-b bg-background/50 px-4 backdrop-blur-sm md:px-6">
+        <div className="relative z-10 flex h-full min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden">
+          <header className="flex h-16 min-w-0 shrink-0 items-center gap-3 border-b bg-background/50 px-3 backdrop-blur-sm sm:gap-4 sm:px-4 md:px-6">
             <SidebarTrigger className="flex-shrink-0" />
             <h2 className="hidden min-w-0 flex-1 truncate text-center font-headline text-base font-semibold text-foreground/85 md:block lg:text-lg">
               {t('headerTagline')}
@@ -76,7 +76,7 @@ export default function DashboardLayout({ children, sidebarContent }: DashboardL
               <LanguageSwitcher />
             </div>
           </header>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
+          <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden">{children}</div>
         </div>
       </div>
     </SidebarProvider>

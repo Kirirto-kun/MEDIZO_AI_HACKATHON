@@ -24,9 +24,44 @@
 
 let refreshInFlight: Promise<boolean> | null = null;
 
+export const AUTH_REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * A stalled mobile connection must settle as an error instead of leaving a
+ * React Query screen in an infinite loading state. Preserve a caller-provided
+ * AbortSignal while adding the application's own upper bound.
+ */
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs = AUTH_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const callerSignal = init?.signal;
+  const abortFromCaller = () => controller.abort();
+
+  if (callerSignal?.aborted) {
+    controller.abort();
+  } else {
+    callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  }
+
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timeout);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
+  }
+}
+
 function refreshAccessToken(): Promise<boolean> {
   if (!refreshInFlight) {
-    refreshInFlight = fetch('/api/auth/refresh', { method: 'POST', credentials: 'same-origin' })
+    refreshInFlight = fetchWithTimeout(
+      '/api/auth/refresh',
+      { method: 'POST', credentials: 'same-origin' },
+      5_000,
+    )
       .then((res) => res.ok)
       .catch(() => false)
       .finally(() => {
@@ -54,7 +89,7 @@ function redirectToLogin(): void {
  * still get a rejected/failed response to short-circuit on.
  */
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const first = await fetch(input, init);
+  const first = await fetchWithTimeout(input, init);
   if (first.status !== 401) return first;
 
   const refreshed = await refreshAccessToken();
@@ -63,5 +98,5 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
     return first;
   }
 
-  return fetch(input, init);
+  return fetchWithTimeout(input, init);
 }

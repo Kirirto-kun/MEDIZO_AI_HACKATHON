@@ -5,8 +5,10 @@ Starting with `1.1.0 (versionCode 2)`, Android and web intentionally render the
 same pages, forms, validation and role-specific capabilities from one source of
 truth. This removes the UI drift that existed in the first native MVP.
 
-Release `1.1.1 (versionCode 3)` replaces all Expo template artwork with the
-DocJob launcher, adaptive, monochrome and splash assets.
+Release `1.1.1 (versionCode 3)` replaced all Expo template artwork with the
+DocJob launcher, adaptive, monochrome and splash assets. Release `1.1.2
+(versionCode 4)` adds bounded session restoration, native/WebView crash
+recovery, stale-document cache protection and narrow-screen hardening.
 
 The app:
 
@@ -18,7 +20,12 @@ The app:
 - appends the stable `DocJobMobile/<version>` user-agent marker so the server
   exposes only DOCTOR and REVIEWER roles in the embedded surface;
 - supports Android Back, retry/offline feedback, uploads and downloads;
-- clears the old `1.0.0` SecureStore bearer-token session once during upgrade.
+- exposes a recovery panel on every page, with reload and a safe return to
+  login after a page/runtime/renderer failure;
+- disables reusable Next.js document caching so a server deployment cannot
+  strand the APK with obsolete Server Action identifiers;
+- clears the old `1.0.0` SecureStore bearer-token session and persisted query
+  cache during upgrade/recovery.
 
 The old Expo Router screens remain temporarily as migration history, but the
 root layout exposes no router slot, so restored navigation state and deep links
@@ -46,14 +53,15 @@ EXPO_PUBLIC_API_URL=https://docjob.kz pnpm --filter mobile exec expo export --pl
 ```
 
 The tests cover the unified root, same-origin navigation policy, unsafe URL
-blocking, legacy-token cleanup, retry state and Android Back behavior. The web
-application owns the complete registration, login, dashboard, case, reviewer,
-profile and localization test coverage.
+blocking, legacy-state cleanup, bounded recovery, renderer/runtime errors,
+retry state and Android Back behavior. The web application owns the complete
+registration, login, dashboard, case, reviewer, profile and localization test
+coverage.
 
 An APK build must also be checked with Android build tools:
 
 - package: `com.docjob.app`;
-- version: `1.1.1 (3)`;
+- version: `1.1.2 (4)`;
 - minimum and target SDK;
 - zip alignment;
 - APK signature;

@@ -3,18 +3,19 @@
     "name": "DocJob",
     "slug": "docjob",
     "scheme": "docjob",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.docjob.app",
-      "buildNumber": "3"
+      "buildNumber": "4"
     },
     "android": {
       "package": "com.docjob.app",
-      "versionCode": 3,
+      "versionCode": 4,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#051620",
         "foregroundImage": "./assets/android-icon-foreground.png",

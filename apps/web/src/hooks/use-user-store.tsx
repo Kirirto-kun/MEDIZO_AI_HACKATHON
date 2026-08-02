@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { SerializedUser as CoreSerializedUser } from '@docjob/core';
 import { trpc } from '@/lib/trpc/react';
+import { fetchWithTimeout } from '@/lib/auth-client';
 
 // Legacy-compatible User type (role is lowercase for existing callers)
 export type UserRole = 'admin' | 'doctor' | 'reviewer';
@@ -96,10 +97,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     () => (isAdmin ? (usersQuery.data ?? []).map(serializedToUser) : []),
     [isAdmin, usersQuery.data],
   );
-  const isUsersLoaded = !isMeLoaded
-    ? false
-    : !isAdmin || usersQuery.isFetched || usersQuery.isError;
-
   const refreshUsers = useCallback(async () => {
     if (!isAdmin) return;
     await usersQuery.refetch();
@@ -107,7 +104,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const loadMe = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      const res = await fetchWithTimeout(
+        '/api/auth/me',
+        { credentials: 'same-origin' },
+        8_000,
+      );
       const data = (await res.json()) as { user: CoreSerializedUser | null };
       setMeUser(data.user ? serializedToUser(data.user) : null);
     } catch {
@@ -169,7 +170,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetchWithTimeout('/api/auth/login', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
@@ -213,11 +214,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, [loadMe]);
 
   const logout = useCallback(async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    await fetchWithTimeout(
+      '/api/auth/logout',
+      { method: 'POST', credentials: 'same-origin' },
+      5_000,
+    ).catch(() => {});
     setMeUser(null);
   }, []);
 
-  const isInitialized = isMeLoaded && (!meUser || isUsersLoaded);
+  // Authentication readiness depends only on `/api/auth/me`. Secondary
+  // admin data must never hold the entire application on a spinner when a
+  // network request stalls; `allUsers` updates independently when it arrives.
+  const isInitialized = isMeLoaded;
 
   return (
     <UserContext.Provider

@@ -10,7 +10,7 @@ export default {
   theme: {
     extend: {
       backgroundImage: {
-        'grid-pattern': "url('/grid.svg')"
+        'grid-pattern': "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSJub25lIiBzdHJva2U9ImhzbCgxODAgMTAwJSA1MCUgLyAwLjA1KSI+PHBhdGggZD0iTTAgLjUgSCAzMiBNIDAgOC41IEggMzIgTSAwIDE2LjUgSCAzMiBNIDAgMjQuNSBIIDMyIE0gLjUgMCBWIDMyIE0gOC41IDAgViAzMiBNIDE2LjUgMCBWIDMyIE0gMjQuNSAwIFYgMzIiIC8+PC9zdmc+')"
       },
       fontFamily: {
         body: ['Inter', 'sans-serif'],

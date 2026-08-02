@@ -94,7 +94,12 @@ COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 # runtime — it's inlined into the Next server bundle at build time).
 COPY --from=build /app/packages/db/prisma ./packages/db/prisma
 
-RUN mkdir -p /app/storage/uploads && chown -R nextjs:nodejs /app/storage
+# Next.js writes the image/data cache at runtime under apps/web/.next/cache.
+# The standalone/static layers above are copied as root, so create and hand
+# ownership of the cache directory to the unprivileged runtime user. Without
+# this, image requests can raise an unhandled EACCES rejection in production.
+RUN mkdir -p /app/storage/uploads /app/apps/web/.next/cache \
+  && chown -R nextjs:nodejs /app/storage /app/apps/web/.next/cache
 USER nextjs
 EXPOSE 3000
 

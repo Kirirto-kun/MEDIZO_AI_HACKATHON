@@ -18,7 +18,7 @@ type CasePageClientProps = {
 export function CasePageClient({ subgroup, caseData }: CasePageClientProps) {
   const t = useTranslations('case.page');
   return (
-    <main className="flex min-h-screen flex-col bg-background">
+    <main className="flex min-h-screen min-h-svh w-full min-w-0 max-w-full flex-col overflow-x-clip bg-background">
       <div className="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-border/40 bg-background/80 px-4 py-2 backdrop-blur md:px-6">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href={`/cases/${subgroup}`}>
@@ -32,7 +32,7 @@ export function CasePageClient({ subgroup, caseData }: CasePageClientProps) {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 md:px-6 lg:px-8">
+      <div className="mx-auto w-full min-w-0 max-w-4xl flex-1 px-4 py-6 md:px-6 lg:px-8">
         <div className="space-y-8">
           <CaseInfoPanel caseData={caseData} />
           <Separator />

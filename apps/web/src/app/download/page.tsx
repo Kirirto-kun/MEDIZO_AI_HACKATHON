@@ -87,7 +87,7 @@ export default async function DownloadPage() {
   const stepKeys = ['invite', 'install', 'feedback'] as const;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen min-h-svh w-full min-w-0 max-w-full flex-col overflow-x-clip bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/40 bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-6">
           <Link href="/landing" className="flex items-center gap-3" aria-label="DocJob">
@@ -156,7 +156,7 @@ export default async function DownloadPage() {
                 return (
                   <Card
                     key={platform.key}
-                    className="flex flex-col border-border/60 bg-card/70 p-6 md:p-7"
+                    className="flex flex-col border-border/60 bg-card/70 p-5 sm:p-6 md:p-7"
                   >
                     <div className="mb-5 flex items-start justify-between gap-4">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/30 bg-primary/10">
@@ -194,7 +194,7 @@ export default async function DownloadPage() {
                           {t('platforms.android.release.title')}
                         </h4>
                         <dl className="mt-3 grid gap-2 text-xs sm:text-sm">
-                          <div className="flex items-baseline justify-between gap-4">
+                          <div className="flex flex-col gap-1 min-[380px]:flex-row min-[380px]:items-baseline min-[380px]:justify-between min-[380px]:gap-4">
                             <dt className="text-muted-foreground">
                               {t('platforms.android.release.version')}
                             </dt>
@@ -207,7 +207,7 @@ export default async function DownloadPage() {
                               </span>
                             </dd>
                           </div>
-                          <div className="flex items-baseline justify-between gap-4">
+                          <div className="flex flex-col gap-1 min-[380px]:flex-row min-[380px]:items-baseline min-[380px]:justify-between min-[380px]:gap-4">
                             <dt className="text-muted-foreground">
                               {t('platforms.android.release.size')}
                             </dt>
@@ -236,7 +236,7 @@ export default async function DownloadPage() {
 
                     <div className="mt-6">
                       {platform.href && platform.release ? (
-                        <Button asChild size="lg" className="w-full">
+                        <Button asChild size="lg" className="h-auto min-h-11 w-full whitespace-normal py-2.5 text-center">
                           <a
                             href={platform.href}
                             download={`DocJob-${platform.release.version}.apk`}
@@ -246,14 +246,14 @@ export default async function DownloadPage() {
                           </a>
                         </Button>
                       ) : platform.href ? (
-                        <Button asChild size="lg" className="w-full">
+                        <Button asChild size="lg" className="h-auto min-h-11 w-full whitespace-normal py-2.5 text-center">
                           <a href={platform.href} target="_blank" rel="noopener noreferrer">
                             {platform.action}
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         </Button>
                       ) : (
-                        <Button type="button" size="lg" className="w-full" disabled>
+                        <Button type="button" size="lg" className="h-auto min-h-11 w-full whitespace-normal py-2.5 text-center" disabled>
                           <Clock3 className="h-4 w-4" />
                           {platform.unavailable}
                         </Button>

@@ -31,11 +31,24 @@ export async function GET(req: NextRequest) {
   }
 
   const user = await core.users.getUserById(claims.sub);
+  // Access JWTs are intentionally short lived, but approval can be revoked
+  // while one is still valid. Fail closed immediately instead of returning a
+  // de-approved profile that the UI would try to render while every protected
+  // API call rejects it. This also heals stale/corrupt browser sessions by
+  // clearing both cookies and letting the client return to login.
+  if (!user || !user.approvedAt) {
+    const res = NextResponse.json(
+      { user: null, status: 'session_invalid' },
+      { status: 401 },
+    );
+    clearAuthCookies(res);
+    return res;
+  }
   // Re-check the current database role instead of trusting the short-lived
   // JWT claim. This closes the role-change window where a user promoted to
   // ADMIN could otherwise keep rendering an already-open mobile session.
   if (
-    user?.role === 'ADMIN' &&
+    user.role === 'ADMIN' &&
     isDocJobMobileUserAgent(req.headers.get('user-agent'))
   ) {
     const res = NextResponse.json(

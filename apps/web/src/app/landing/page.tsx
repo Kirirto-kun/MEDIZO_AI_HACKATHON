@@ -124,13 +124,13 @@ export default async function LandingPage() {
   }));
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen min-h-svh w-full min-w-0 max-w-full flex-col overflow-x-clip bg-background text-foreground">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <DocJobLogo className="h-8 w-8 text-primary" />
             <span className="font-headline text-lg font-semibold text-primary">DocJob</span>
@@ -176,7 +176,7 @@ export default async function LandingPage() {
 
       <Separator className="opacity-30" />
 
-      <section id="capabilities" className="px-6 py-20">
+      <section id="capabilities" className="px-4 py-16 sm:px-6 md:py-20">
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 text-center">
             <Badge variant="outline" className="mb-3 border-primary/40 bg-primary/10 text-primary">
@@ -196,7 +196,7 @@ export default async function LandingPage() {
               return (
                 <Card
                   key={c.key}
-                  className="border-border/60 bg-card/60 p-6 transition-colors hover:border-primary/40"
+                  className="border-border/60 bg-card/60 p-5 transition-colors hover:border-primary/40 sm:p-6"
                 >
                   <div className="flex items-start gap-4">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
@@ -216,7 +216,7 @@ export default async function LandingPage() {
 
       <Separator className="opacity-30" />
 
-      <section id="catalog" className="px-6 py-20">
+      <section id="catalog" className="px-4 py-16 sm:px-6 md:py-20">
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 text-center">
             <Badge variant="outline" className="mb-3 border-accent/40 bg-accent/10 text-accent">
@@ -230,7 +230,7 @@ export default async function LandingPage() {
             </p>
           </div>
 
-          <Card className="mb-8 border-primary/40 bg-primary/5 p-6 md:p-8">
+          <Card className="mb-8 border-primary/40 bg-primary/5 p-5 sm:p-6 md:p-8">
             <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-primary/40 bg-primary/15">
                 <Brain className="h-6 w-6 text-primary" />
@@ -278,8 +278,8 @@ export default async function LandingPage() {
 
       <Separator className="opacity-30" />
 
-      <section className="px-6 py-16 md:py-20">
-        <Card className="mx-auto max-w-5xl overflow-hidden border-primary/40 bg-primary/5 p-6 md:p-9">
+      <section className="px-4 py-16 sm:px-6 md:py-20">
+        <Card className="mx-auto max-w-5xl overflow-hidden border-primary/40 bg-primary/5 p-5 sm:p-6 md:p-9">
           <div className="flex flex-col items-start gap-6 md:flex-row md:items-center">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10">
               <Smartphone className="h-7 w-7 text-primary" />
@@ -307,15 +307,15 @@ export default async function LandingPage() {
 
       <Separator className="opacity-30" />
 
-      <section className="px-6 py-20">
+      <section className="px-4 py-16 sm:px-6 md:py-20">
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-5 text-center">
           <h2 className="font-headline text-3xl font-semibold md:text-4xl">{t('cta.title')}</h2>
           <p className="max-w-xl text-base text-muted-foreground md:text-lg">
             {t('cta.description')}
           </p>
-          <div className="flex justify-center">
-            <Link href="/register">
-              <Button size="lg" className="h-12 px-10 text-base">
+          <div className="flex w-full justify-center">
+            <Link href="/register" className="w-full max-w-sm sm:w-auto">
+              <Button size="lg" className="h-auto min-h-12 w-full whitespace-normal px-6 py-3 text-base sm:w-auto sm:px-10">
                 {t('cta.primary')}
               </Button>
             </Link>
@@ -325,7 +325,7 @@ export default async function LandingPage() {
 
       <Separator className="opacity-30" />
 
-      <section id="contacts" className="px-6 py-20">
+      <section id="contacts" className="px-4 py-16 sm:px-6 md:py-20">
         <div className="mx-auto max-w-3xl">
           <div className="mb-10 text-center">
             <Badge variant="outline" className="mb-3 border-primary/40 bg-primary/10 text-primary">
@@ -336,7 +336,7 @@ export default async function LandingPage() {
             </h2>
           </div>
 
-          <Card className="border-border/60 bg-card/60 p-8">
+          <Card className="border-border/60 bg-card/60 p-5 sm:p-8">
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="flex items-start gap-3">
                 <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -370,7 +370,7 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      <footer className="mt-auto border-t border-border/40 px-6 py-8">
+      <footer className="mt-auto border-t border-border/40 px-4 py-8 sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
             <DocJobLogo className="h-6 w-6 text-primary" />
@@ -421,7 +421,7 @@ async function HeroSection({ directions }: { directions: Direction[] }) {
   const headlinePrefix = t('headlinePrefix');
   const headlineSuffix = t('headlineSuffix');
   return (
-    <section className="relative flex min-h-[88vh] flex-col items-center justify-center overflow-hidden px-6 py-24 text-center">
+    <section className="relative flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center overflow-hidden px-4 py-16 text-center sm:min-h-[88vh] sm:px-6 sm:py-24">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
           className="absolute rounded-full opacity-20 blur-3xl"
@@ -476,7 +476,7 @@ async function HeroSection({ directions }: { directions: Direction[] }) {
           {t('badge')}
         </Badge>
 
-        <h1 className="break-words font-headline text-2xl font-semibold leading-tight tracking-tight sm:text-3xl md:text-5xl lg:text-[3.25rem]">
+        <h1 className="max-w-full break-words font-headline text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-3xl md:text-5xl lg:text-[3.25rem]">
           {headlinePrefix ? (
             <span className="block text-foreground/85">{headlinePrefix}</span>
           ) : null}
@@ -490,13 +490,13 @@ async function HeroSection({ directions }: { directions: Direction[] }) {
           {t('subtitle')}
         </p>
 
-        <div className="flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/register">
-            <Button size="lg" className="h-12 px-10 text-base shadow-lg shadow-primary/20">
+        <div className="flex w-full max-w-sm flex-col justify-center gap-3 sm:w-auto sm:max-w-none sm:flex-row">
+          <Link href="/register" className="w-full sm:w-auto">
+            <Button size="lg" className="h-auto min-h-12 w-full whitespace-normal px-6 py-3 text-base shadow-lg shadow-primary/20 sm:w-auto sm:px-10">
               {t('ctaPrimary')}
             </Button>
           </Link>
-          <Button asChild size="lg" variant="outline" className="h-12 px-8 text-base">
+          <Button asChild size="lg" variant="outline" className="h-auto min-h-12 w-full whitespace-normal px-6 py-3 text-base sm:w-auto sm:px-8">
             <Link href="/download">
               <Smartphone className="h-4 w-4" />
               {t('ctaDownload')}
@@ -560,7 +560,7 @@ async function HeroSection({ directions }: { directions: Direction[] }) {
 async function AiSearchHeroSection() {
   const t = await getTranslations('landing.aiSearchHero');
   return (
-    <section className="relative overflow-hidden px-6 py-20">
+    <section className="relative overflow-hidden px-4 py-16 sm:px-6 md:py-20">
       <div className="pointer-events-none absolute inset-0">
         <div
           className="absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-20 blur-3xl"
@@ -594,7 +594,7 @@ async function AiSearchHeroSection() {
         </Badge>
 
         <h2
-          className="font-headline text-3xl font-semibold leading-tight tracking-tight md:text-5xl"
+          className="max-w-full break-words font-headline text-3xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] md:text-5xl"
         >
           <span
             className="block text-foreground/85"
@@ -618,11 +618,11 @@ async function AiSearchHeroSection() {
         </p>
 
         <div
-          className="flex justify-center"
+          className="flex w-full justify-center"
           style={{ animation: 'aiSearchFade 0.8s ease-out 1s both' }}
         >
-          <Link href="/register">
-            <Button size="lg" className="h-12 px-10 text-base">
+          <Link href="/register" className="w-full max-w-sm sm:w-auto">
+            <Button size="lg" className="h-auto min-h-12 w-full whitespace-normal px-6 py-3 text-base sm:w-auto sm:px-10">
               <Sparkles className="mr-2 h-4 w-4" />
               {t('cta')}
             </Button>
@@ -638,7 +638,7 @@ async function NewsSection({ items }: { items: LandingNewsItem[] }) {
   const locale = await getLocale();
 
   return (
-    <section id="news" className="px-6 py-20">
+    <section id="news" className="px-4 py-16 sm:px-6 md:py-20">
       <div className="mx-auto max-w-7xl">
         <div className="mb-12 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">

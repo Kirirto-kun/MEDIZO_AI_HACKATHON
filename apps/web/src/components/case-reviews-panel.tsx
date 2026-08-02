@@ -133,7 +133,7 @@ export function CaseReviewsPanel({ caseId }: CaseReviewsPanelProps) {
                     )}
                   </div>
                 </div>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">{r.body}</p>
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{r.body}</p>
               </div>
             );
           })}

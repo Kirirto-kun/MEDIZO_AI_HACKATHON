@@ -94,7 +94,7 @@ export default function MyReviewsPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{r.body}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{r.body}</p>
                     <Link
                       href={`/cases/${r.case.subgroup ?? 'clinical'}/${r.case.id}`}
                       className="inline-flex text-sm text-primary hover:underline"

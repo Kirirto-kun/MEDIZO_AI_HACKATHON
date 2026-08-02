@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -18,6 +18,10 @@ import { LanguageSwitcher } from '@/components/language-switcher';
 import { Loader2 } from 'lucide-react';
 import { useUserStore } from '@/hooks/use-user-store';
 import { safeReturnPath } from '@/lib/safe-return-path';
+import {
+  LOGIN_SESSION_RESTORE_TIMEOUT_MS,
+  shouldAttemptSessionRestore,
+} from '@/lib/login-session-restore';
 
 function LoginForm() {
   const router = useRouter();
@@ -28,25 +32,56 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const justRegistered = searchParams.get('pending') === '1';
   const mobileAdminBlocked = searchParams.get('mobileAdmin') === '1';
+  const recovered = searchParams.get('recovered') === '1';
+  const mobileRecovery = searchParams.get('mobileRecovery') === '1';
+  const mobileRecoveryDone = searchParams.get('mobileRecoveryDone') === '1';
+  const skipRestore = searchParams.get('skipRestore') === '1';
   const callbackUrl = safeReturnPath(searchParams.get('callbackUrl'));
+  const shouldRestore = shouldAttemptSessionRestore({
+    justRegistered,
+    mobileAdminBlocked,
+    recovered,
+    mobileRecovery,
+    mobileRecoveryDone,
+    skipRestore,
+  });
   const [isRestoringSession, setIsRestoringSession] = useState(
-    !justRegistered && !mobileAdminBlocked,
+    shouldRestore,
   );
+  const restoreAbortRef = useRef<AbortController | null>(null);
+  const restoreDismissedRef = useRef(false);
+
+  const revealLoginForm = () => {
+    restoreDismissedRef.current = true;
+    restoreAbortRef.current?.abort();
+    restoreAbortRef.current = null;
+    setIsRestoringSession(false);
+  };
 
   useEffect(() => {
-    if (justRegistered || mobileAdminBlocked) {
+    if (!shouldRestore) {
+      restoreAbortRef.current?.abort();
+      restoreAbortRef.current = null;
       setIsRestoringSession(false);
       return;
     }
 
     let active = true;
+    const controller = new AbortController();
+    restoreAbortRef.current = controller;
+    restoreDismissedRef.current = false;
     setIsRestoringSession(true);
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      LOGIN_SESSION_RESTORE_TIMEOUT_MS,
+    );
     void fetch('/api/auth/refresh', {
       method: 'POST',
       credentials: 'same-origin',
+      signal: controller.signal,
     })
       .then(async (res) => {
-        if (!active) return;
+        if (!active || restoreDismissedRef.current) return;
         if (res.ok) {
           // A full document navigation remounts the root UserProvider. A
           // client-only router transition would keep the parallel, earlier
@@ -66,13 +101,22 @@ function LoginForm() {
         // Keep the login form usable when session restoration is unavailable.
       })
       .finally(() => {
+        window.clearTimeout(timeoutId);
+        if (restoreAbortRef.current === controller) {
+          restoreAbortRef.current = null;
+        }
         if (active) setIsRestoringSession(false);
       });
 
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
+      controller.abort();
+      if (restoreAbortRef.current === controller) {
+        restoreAbortRef.current = null;
+      }
     };
-  }, [callbackUrl, justRegistered, mobileAdminBlocked]);
+  }, [callbackUrl, shouldRestore]);
 
   const loginSchema = z.object({
     email: z.string().email(t('errors.emailInvalid')),
@@ -118,9 +162,24 @@ function LoginForm() {
 
   if (isRestoringSession) {
     return (
-      <div className="flex min-h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span>{t('loading')}</span>
+      <div
+        className="flex min-h-28 min-w-0 flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex min-w-0 items-center justify-center gap-2">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+          <span className="break-words">{t('restore.loading')}</span>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-auto min-h-9 max-w-full whitespace-normal py-2"
+          onClick={revealLoginForm}
+        >
+          {t('restore.useAnotherAccount')}
+        </Button>
       </div>
     );
   }
@@ -140,6 +199,17 @@ function LoginForm() {
           <p className="font-medium">{t('mobileAdminBanner.title')}</p>
           <p className="mt-1 text-xs leading-relaxed text-amber-200/85">
             {t('mobileAdminBanner.body')}
+          </p>
+        </div>
+      ) : null}
+      {recovered || mobileRecoveryDone ? (
+        <div
+          className="min-w-0 rounded-md border border-primary/40 bg-primary/10 p-3 text-sm text-foreground"
+          role="status"
+        >
+          <p className="break-words font-medium">{t('recoveredBanner.title')}</p>
+          <p className="mt-1 break-words text-xs leading-relaxed text-muted-foreground">
+            {t('recoveredBanner.body')}
           </p>
         </div>
       ) : null}
@@ -165,11 +235,11 @@ function LoginForm() {
 export default function LoginPage() {
   const t = useTranslations('auth.login');
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background p-4 pt-16 sm:pt-4">
+    <div className="relative flex min-h-screen min-h-svh w-full min-w-0 max-w-full items-start justify-center overflow-x-clip bg-background p-4 pt-16 sm:items-center sm:pt-4">
       <div className="absolute right-4 top-4 z-10">
         <LanguageSwitcher variant="outline" />
       </div>
-      <Card className="w-full max-w-sm">
+      <Card className="my-auto w-full min-w-0 max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <DocJobLogo className="h-16 w-16" />

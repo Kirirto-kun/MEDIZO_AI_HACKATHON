@@ -58,13 +58,13 @@ export function LandingContactForm() {
   };
 
   return (
-    <div className="flex flex-col-reverse gap-8 xl:flex-row">
+    <div className="flex min-w-0 flex-col-reverse gap-8 xl:flex-row">
       <motion.div
-        initial={{ opacity: 0, x: -40 }}
-        whileInView={{ opacity: 1, x: 0 }}
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="xl:flex-[0.75]"
+        className="min-w-0 w-full xl:flex-[0.75]"
       >
         <Card className="border-border/60 bg-card/60 p-6 md:p-8">
           <h3 className="font-headline text-xl font-semibold md:text-2xl">{t('heading')}</h3>
@@ -108,11 +108,11 @@ export function LandingContactForm() {
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, x: 40 }}
-        whileInView={{ opacity: 1, x: 0 }}
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6 }}
-        className="flex flex-col xl:flex-1"
+        className="flex min-w-0 w-full flex-col xl:flex-1"
       >
         <div className="h-[320px] md:h-[460px] xl:h-full xl:min-h-[460px]">
           <EarthCanvas />

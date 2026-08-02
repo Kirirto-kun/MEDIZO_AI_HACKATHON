@@ -241,6 +241,27 @@ describe('mobile-transport auth endpoints (integration, real Postgres)', () => {
     expect(data.user?.id).toBe(user.id);
   });
 
+  it('GET /api/auth/me clears a session when approval is revoked after login', async () => {
+    const user = await makeApprovedUser();
+    const { access } = await loginAs(user.email);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { approvedAt: null },
+    });
+
+    const req = new NextRequest('https://example.test/api/auth/me', {
+      headers: { authorization: `Bearer ${access}` },
+    });
+    const res = await mePOST(req);
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({
+      user: null,
+      status: 'session_invalid',
+    });
+    expect(res.headers.get('set-cookie')).toMatch(/docjob-access=;/);
+  });
+
   it('GET /api/auth/me blocks mobile access after the database role changes to ADMIN', async () => {
     const user = await makeApprovedUser('DOCTOR');
     const { access } = await loginAs(user.email);

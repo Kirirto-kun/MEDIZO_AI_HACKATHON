@@ -22,8 +22,9 @@ export default function UserSwitcher() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
-    router.refresh();
+    // If the logout request timed out, the HttpOnly refresh cookie may still
+    // exist. A plain login navigation would auto-restore that same session.
+    window.location.replace('/login?skipRestore=1');
   };
 
   if (!currentUser) {

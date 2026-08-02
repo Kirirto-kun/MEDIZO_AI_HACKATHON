@@ -46,7 +46,7 @@ export function CaseBodyViewerInner({ body, className }: CaseBodyViewerInnerProp
   return (
     <div
       className={cn(
-        'case-body-prose rounded-lg border border-border/30 px-5 py-4 shadow-sm sm:px-7 sm:py-6',
+        'case-body-prose min-w-0 max-w-full overflow-x-auto rounded-lg border border-border/30 px-4 py-4 shadow-sm sm:px-7 sm:py-6',
         className,
       )}
     >

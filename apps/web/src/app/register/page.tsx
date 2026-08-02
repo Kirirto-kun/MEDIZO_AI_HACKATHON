@@ -195,11 +195,11 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background p-4 pt-16 sm:pt-4">
+    <div className="relative flex min-h-screen min-h-svh w-full min-w-0 max-w-full items-start justify-center overflow-x-clip bg-background p-4 pt-16 sm:items-center sm:pt-4">
       <div className="absolute right-4 top-4 z-10">
         <LanguageSwitcher variant="outline" />
       </div>
-      <Card className="w-full max-w-lg">
+      <Card className="my-auto w-full min-w-0 max-w-lg">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <DocJobLogo className="h-16 w-16" />
@@ -209,9 +209,13 @@ export default function RegisterPage() {
         </CardHeader>
         <CardContent>
           <Tabs value={accountKind} onValueChange={onTabChange} className="mb-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="user">{t('accountKind.user')}</TabsTrigger>
-              <TabsTrigger value="reviewer">{t('accountKind.reviewer')}</TabsTrigger>
+            <TabsList className="grid w-full min-w-0 grid-cols-2">
+              <TabsTrigger value="user" className="min-w-0 px-1.5 text-xs min-[380px]:px-3 min-[380px]:text-sm">
+                {t('accountKind.user')}
+              </TabsTrigger>
+              <TabsTrigger value="reviewer" className="min-w-0 px-1.5 text-xs min-[380px]:px-3 min-[380px]:text-sm">
+                {t('accountKind.reviewer')}
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 

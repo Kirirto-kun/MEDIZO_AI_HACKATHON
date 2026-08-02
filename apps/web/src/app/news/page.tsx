@@ -40,7 +40,7 @@ export default async function NewsPage() {
                 <span>{formatNewsDate(item.date, locale)}</span>
               </div>
               <h2 className="text-lg font-semibold leading-snug">{item.title}</h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90 [overflow-wrap:anywhere]">
                 {item.body}
               </p>
             </Card>

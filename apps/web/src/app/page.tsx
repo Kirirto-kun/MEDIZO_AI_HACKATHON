@@ -19,7 +19,6 @@ import {
   CardDescription,
   CardTitle,
   CardFooter,
-  CardHeader,
   CardContent,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,11 +27,14 @@ import { usePatientStore } from '@/hooks/use-patient-store';
 
 export default function Home() {
   const { currentUser, isInitialized: userIsInitialized, allUsers } = useUserStore();
-  const { activePatient, isInitialized: patientIsInitialized } = usePatientStore();
+  const { activePatient } = usePatientStore();
   const router = useRouter();
   const t = useTranslations('home');
 
-  const isLoading = !userIsInitialized || !patientIsInitialized;
+  // The dashboard needs only the authenticated profile. Case-catalog data is
+  // secondary and must not trap the whole app behind a spinner on a slow or
+  // interrupted mobile connection.
+  const isLoading = !userIsInitialized;
 
   useEffect(() => {
     if (!isLoading && !currentUser) {
@@ -61,19 +63,19 @@ export default function Home() {
       const legacyCaseId = activePatient?.id;
       const legacySubgroup = activePatient?.subgroup;
       return (
-        <Card className="m-auto flex flex-col items-center justify-center p-8 sm:p-12 text-center bg-card/80 animate-fade-in">
+        <Card className="m-auto flex w-full min-w-0 max-w-lg flex-col items-center justify-center bg-card/80 p-6 text-center animate-fade-in sm:p-12">
           <ShieldAlert className="h-12 w-12 text-accent mb-4" />
           <CardTitle className="text-2xl font-headline">{t('doctor.title')}</CardTitle>
           <CardDescription className="mt-2 max-w-md">
             {t('doctor.description')}
           </CardDescription>
           <CardFooter className="mt-6 flex flex-col gap-3 w-full max-w-xs">
-            <Button className="w-full" onClick={() => router.push('/select-subgroup')}>
+            <Button className="h-auto min-h-10 w-full whitespace-normal py-2" onClick={() => router.push('/select-subgroup')}>
               {t('doctor.selectSubgroup')}
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/saved-cases')}
             >
               <Star className="mr-2 h-4 w-4" />
@@ -81,7 +83,7 @@ export default function Home() {
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/ai-search')}
             >
               <Search className="mr-2 h-4 w-4" />
@@ -89,7 +91,7 @@ export default function Home() {
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/suggest-case')}
             >
               <FilePlus2 className="mr-2 h-4 w-4" />
@@ -98,7 +100,7 @@ export default function Home() {
             {legacyCaseId && legacySubgroup ? (
               <Button
                 variant="ghost"
-                className="w-full"
+                className="h-auto min-h-10 w-full whitespace-normal py-2"
                 onClick={() => router.push(`/cases/${legacySubgroup}/${legacyCaseId}`)}
               >
                 {t('doctor.continueCase', { name: activePatient?.name ?? '' })}
@@ -111,19 +113,19 @@ export default function Home() {
 
     if (currentUser.role === 'reviewer') {
       return (
-        <Card className="m-auto flex flex-col items-center justify-center p-8 sm:p-12 text-center bg-card/80 animate-fade-in">
+        <Card className="m-auto flex w-full min-w-0 max-w-lg flex-col items-center justify-center bg-card/80 p-6 text-center animate-fade-in sm:p-12">
           <PenSquare className="h-12 w-12 text-accent mb-4" />
           <CardTitle className="text-2xl font-headline">{t('reviewer.title')}</CardTitle>
           <CardDescription className="mt-2 max-w-md">
             {t('reviewer.description')}
           </CardDescription>
           <CardFooter className="mt-6 flex flex-col gap-3 w-full max-w-xs">
-            <Button className="w-full" onClick={() => router.push('/select-subgroup')}>
+            <Button className="h-auto min-h-10 w-full whitespace-normal py-2" onClick={() => router.push('/select-subgroup')}>
               {t('reviewer.selectSubgroup')}
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/saved-cases')}
             >
               <Star className="mr-2 h-4 w-4" />
@@ -131,7 +133,7 @@ export default function Home() {
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/reviewer/my-reviews')}
             >
               <PenSquare className="mr-2 h-4 w-4" />
@@ -139,7 +141,7 @@ export default function Home() {
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/ai-search')}
             >
               <Search className="mr-2 h-4 w-4" />
@@ -147,7 +149,7 @@ export default function Home() {
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/suggest-case')}
             >
               <FilePlus2 className="mr-2 h-4 w-4" />
@@ -162,7 +164,7 @@ export default function Home() {
       const doctorCount = allUsers.filter((u) => u.role === 'doctor').length;
       const reviewerCount = allUsers.filter((u) => u.role === 'reviewer').length;
       return (
-        <Card className="m-auto flex flex-col items-center justify-center p-8 sm:p-12 text-center bg-card/80 animate-fade-in">
+        <Card className="m-auto flex w-full min-w-0 max-w-lg flex-col items-center justify-center bg-card/80 p-6 text-center animate-fade-in sm:p-12">
           <CardTitle className="text-2xl font-headline">{t('admin.welcome')}</CardTitle>
           <CardDescription className="mt-2">{t('admin.description')}</CardDescription>
           <CardContent className="mt-6 text-left">
@@ -173,12 +175,12 @@ export default function Home() {
             </ul>
           </CardContent>
           <CardFooter className="flex flex-col gap-2 w-full max-w-xs">
-            <Button className="w-full" onClick={() => router.push('/add-doctor')}>
+            <Button className="h-auto min-h-10 w-full whitespace-normal py-2" onClick={() => router.push('/add-doctor')}>
               {t('admin.addDoctor')}
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/ai-search')}
             >
               <Search className="mr-2 h-4 w-4" />
@@ -186,7 +188,7 @@ export default function Home() {
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="h-auto min-h-10 w-full whitespace-normal py-2"
               onClick={() => router.push('/admin/case-submissions')}
             >
               <Inbox className="mr-2 h-4 w-4" />
@@ -198,7 +200,7 @@ export default function Home() {
     }
 
     return (
-      <Card className="m-auto flex flex-col items-center justify-center p-12 text-center bg-card/80 animate-fade-in">
+      <Card className="m-auto flex w-full min-w-0 max-w-lg flex-col items-center justify-center bg-card/80 p-6 text-center animate-fade-in sm:p-12">
         <CardTitle className="text-2xl font-headline">
           {t('fallback.welcome', { name: currentUser.name })}
         </CardTitle>
@@ -211,7 +213,7 @@ export default function Home() {
     <DashboardLayout
       sidebarContent={<ScenarioControls onScenarioGenerated={() => {}} />}
     >
-      <main className="flex-1 flex items-center justify-center p-4 md:p-6 lg:p-8">
+      <main className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-y-auto p-4 md:p-6 lg:p-8">
         <MainContent />
       </main>
     </DashboardLayout>

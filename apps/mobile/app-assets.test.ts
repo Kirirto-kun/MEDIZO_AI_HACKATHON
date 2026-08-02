@@ -9,6 +9,7 @@ const appConfig = require('./app.json').expo as {
   ios: { buildNumber: string };
   android: {
     versionCode: number;
+    softwareKeyboardLayoutMode: string;
     adaptiveIcon: {
       backgroundColor: string;
       foregroundImage: string;
@@ -49,9 +50,9 @@ function readPng(relativePath: string) {
 
 describe('release branding', () => {
   it('uses the next installable release identity', () => {
-    expect(appConfig.version).toBe('1.1.1');
-    expect(appConfig.android.versionCode).toBe(3);
-    expect(appConfig.ios.buildNumber).toBe('3');
+    expect(appConfig.version).toBe('1.1.2');
+    expect(appConfig.android.versionCode).toBe(4);
+    expect(appConfig.ios.buildNumber).toBe('4');
   });
 
   it.each([
@@ -84,5 +85,9 @@ describe('release branding', () => {
         backgroundColor: '#051620',
       },
     });
+  });
+
+  it('resizes the WebView when the Android keyboard opens', () => {
+    expect(appConfig.android.softwareKeyboardLayoutMode).toBe('resize');
   });
 });

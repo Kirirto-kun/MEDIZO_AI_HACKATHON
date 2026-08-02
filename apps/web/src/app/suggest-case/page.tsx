@@ -505,7 +505,7 @@ function ThreadView({
                 <p className="text-[10px] font-medium uppercase opacity-70">
                   {isMe ? t('thread.you') : m.senderName}
                 </p>
-                <p className="mt-1 whitespace-pre-wrap leading-relaxed">{m.body}</p>
+                <p className="mt-1 whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere]">{m.body}</p>
                 {m.attachments.length > 0 ? (
                   <ul className="mt-2 space-y-1">
                     {m.attachments.map((a) => (

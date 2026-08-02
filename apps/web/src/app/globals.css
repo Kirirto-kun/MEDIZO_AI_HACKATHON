@@ -80,8 +80,32 @@
   * {
     @apply border-border;
   }
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overscroll-behavior-x: none;
+  }
+  /* Transforms and blurred decorative layers must never create a sideways
+     page scroll on narrow Android viewports. `clip` avoids introducing a new
+     scroll container, so sticky headers continue to behave normally. */
+  @supports (overflow: clip) {
+    html,
+    body {
+      overflow-x: clip;
+    }
+  }
+  @supports not (overflow: clip) {
+    html,
+    body {
+      overflow-x: hidden;
+    }
+  }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    min-height: 100svh;
   }
   /* Search-result snippet highlighting (ts_headline <mark> tags). Themed for
      the dark-mode-first UI: a translucent primary wash that stays legible on
@@ -137,6 +161,8 @@
     --case-body-border: #e2e2df;
     background-color: var(--case-body-bg);
     color: var(--case-body-fg);
+    min-width: 0;
+    max-width: 100%;
   }
   /* Override BlockNote's own theming so the surface reads as light paper. */
   .case-body-prose .bn-editor,
@@ -144,6 +170,8 @@
   .case-body-prose [data-color-scheme] {
     background-color: var(--case-body-bg);
     color: var(--case-body-fg);
+    min-width: 0;
+    max-width: 100%;
   }
   .case-body-prose .bn-editor {
     --bn-colors-editor-background: var(--case-body-bg);
@@ -197,6 +225,10 @@
   .case-body-prose table {
     border-color: var(--case-body-border);
   }
+  .case-body-prose .bn-block-content[data-content-type="table"] {
+    max-width: 100%;
+    overflow-x: auto;
+  }
   .case-body-prose .bn-block-content[data-content-type="table"] td,
   .case-body-prose .bn-block-content[data-content-type="table"] th {
     border-color: var(--case-body-border);
@@ -204,6 +236,8 @@
   }
   /* Images keep tidy spacing/rounding inside the reading panel. */
   .case-body-prose img {
+    max-width: 100%;
+    height: auto;
     border-radius: 0.375rem;
     margin-top: 0.5rem;
     margin-bottom: 0.5rem;
