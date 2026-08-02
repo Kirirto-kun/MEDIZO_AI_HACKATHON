@@ -24,10 +24,6 @@
     },
     "state": {
       "loading": "Загрузка…",
-      "restore": {
-        "loading": "Проверяем сохранённую сессию…",
-        "useAnotherAccount": "Войти другим аккаунтом"
-      },
       "empty": "Пока ничего нет",
       "error": "Ошибка",
       "success": "Готово"
@@ -105,6 +101,10 @@
       "passwordLabel": "Пароль",
       "submit": "Войти",
       "loading": "Загрузка…",
+      "restore": {
+        "loading": "Проверяем сохранённую сессию…",
+        "useAnotherAccount": "Войти другим аккаунтом"
+      },
       "noAccount": "Нет аккаунта?",
       "registerCta": "Зарегистрироваться",
       "forgotPassword": "Забыли пароль?",
